@@ -181,7 +181,6 @@ def training_loop(
     device,
 ):
     for epoch in range(N_EPOCHS):
-
         train_g_loss, train_d_loss = train_epoch(
             generator,
             discriminator,
