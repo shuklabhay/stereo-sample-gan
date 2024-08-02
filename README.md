@@ -4,7 +4,6 @@ Audio Generation using Deep Convolution in generative and variational networks
 
 ## Directories
 
-- `model`: Saved model states
-- `output`: Generated audio
+- `model`: Model save and generated output location
 - `src`: Source code for models
   - `utils`: Model and data utilities

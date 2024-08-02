@@ -10,7 +10,7 @@ import torch
 audio_data_dir = "data/kick_samples"
 sinetest_data_dir = "data/sine_test"
 compiled_data_path = "data/compiled_data.npy"
-audio_output_dir = "output"
+audio_output_dir = "model"
 model_save_dir = "model"
 
 AUDIO_SAMPLE_LENGTH = 0.5  # 500 ms
