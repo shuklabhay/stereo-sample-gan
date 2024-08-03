@@ -182,7 +182,6 @@ def graph_spectrogram(audio_data, sample_name):
 
 # Encoding audio
 def extract_sample_amplitudes(audio_data):
-
     sample_as_amplitudes = []
     for channel in audio_data:
         channel_mean = np.mean(channel)
