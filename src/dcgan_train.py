@@ -118,4 +118,4 @@ def training_loop(
 
         # Save models periodically
         if (epoch + 1) % SAVE_INTERVAL == 0:
-            save_model(generator)
+            save_model(generator, "DCGAN_final_model")

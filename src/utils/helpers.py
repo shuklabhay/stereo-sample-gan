@@ -24,7 +24,7 @@ def load_npy_data(file_path):
     return np.load(file_path, allow_pickle=True)
 
 
-def save_model(model, preserve_old=False):
+def save_model(model, name, preserve_old=False):
     # Clear previous models
     if preserve_old is not True:
         for filename in os.listdir(model_save_dir):
@@ -34,7 +34,7 @@ def save_model(model, preserve_old=False):
     # Save model
     torch.save(
         model.state_dict(),
-        f"{model_save_dir}/generator_final_model.pth",
+        f"{model_save_dir}/{name}.pth",
     )
     print(f"Model Saved")
 
@@ -99,8 +99,7 @@ def normalize_sample_length(audio_file_path):
     return y
 
 
-def noise_thresh(data):
-    threshold = 10e-3
+def noise_thresh(data, threshold=10e-3):
 
     data[np.abs(data) < threshold] = 0
     return data
@@ -113,30 +112,6 @@ def data_loudness_normalize(audio_data):
     normalized_audio_data = (audio_data - min_val) / (max_val - min_val + 1e-6) * 2 - 1
     rounded_audio_data = np.round(normalized_audio_data, decimals=6)
     return rounded_audio_data
-
-
-def clean_and_scale_amplitudes(channel_amps):
-    channel_amps = noise_thresh(channel_amps)
-    log_values = 20 * np.log10(np.abs(channel_amps) + 1e-6)
-    log_values = log_values + 120  # Offset by minimum value
-    normalized_loudness = data_loudness_normalize(log_values)
-
-    return normalized_loudness
-
-
-def clean_and_scale_generated(audio_data):
-    new_min = 0
-    new_max = 160
-
-    old_min, old_max = np.min(audio_data), np.max(audio_data)
-    scaled_audio_data = (audio_data - old_min) / (old_max - old_min) * (
-        new_max - new_min
-    ) + new_min
-
-    scaled_audio_data -= 120
-    amp_audio_data = 10 ** (scaled_audio_data / 20)
-
-    return amp_audio_data  # Amplitudes
 
 
 # Graphing
@@ -198,6 +173,15 @@ def extract_sample_amplitudes(audio_data):
     return sample_as_amplitudes  # (2 Channels, ? Frames, ? FreqBins)
 
 
+def clean_and_scale_amplitudes(channel_amps):
+    channel_amps = noise_thresh(channel_amps)
+    log_values = 20 * np.log10(np.abs(channel_amps) + 1e-6)  # Avoid log0 error
+    log_values = log_values + 120  # Offset by minimum value
+    normalized_loudness = data_loudness_normalize(log_values)
+
+    return normalized_loudness
+
+
 def encode_sample(sample_path):
     normalized_y = normalize_sample_length(sample_path)
 
@@ -225,6 +209,22 @@ def encode_sample_directory(sample_dir, silent=True):
 
 
 # Decoding audio
+def clean_and_scale_generated(loudness_data):
+    new_min = 0
+    new_max = 160
+
+    old_min, old_max = np.min(loudness_data), np.max(loudness_data)
+    scaled_loudness_data = (loudness_data - old_min) / (old_max - old_min) * (
+        new_max - new_min
+    ) + new_min
+
+    scaled_loudness_data -= 120
+    amp_data = 10 ** (np.abs(scaled_loudness_data) / 20)
+    amp_data = noise_thresh(amp_data)
+
+    return amp_data  # Amplitudes
+
+
 def amplitudes_to_wav(amplitudes, name):
     audio_channels = []
     for channel_loudness in amplitudes:
