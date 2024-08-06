@@ -1,14 +1,12 @@
 import torch
 import torch.nn as nn
 
+from utils.helpers import N_CHANNELS, N_FRAMES, N_FREQ_BINS
+
 # Constants Constants
 BATCH_SIZE = 16
 LATENT_DIM = 100
 N_EPOCHS = 10
-
-N_CHANNELS = 2  # Left, right
-N_FRAMES = 345
-N_FREQ_BINS = 257
 
 VALIDATION_INTERVAL = int(N_EPOCHS / 2)
 SAVE_INTERVAL = int(N_EPOCHS / 1)

@@ -18,6 +18,10 @@ GLOBAL_SR = 44100
 GLOBAL_FRAME_SIZE = 2**9
 GLOBAL_HOP_LENGTH = 2**6
 
+N_CHANNELS = 2  # Left, right
+N_FRAMES = 345
+N_FREQ_BINS = 257
+
 
 # Model Utility
 def load_npy_data(file_path):
@@ -163,7 +167,7 @@ def extract_sample_amplitudes(audio_data):
 
         stft = librosa.stft(
             channel, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
-        )
+        )  # FreqBins, Frames
         amplitudes = np.abs(stft).T
         sample_as_amplitudes.append(amplitudes)
 
@@ -221,14 +225,34 @@ def scale_normalized_db_to_amplis(loudness_data):
     return amp_data  # Amplitudes
 
 
+def istft_with_phase_reconstriction(amplitudes):
+    # Griffith-Lim Phase Reconstruction Algorithm
+    iterations = 200
+
+    phase = np.random.rand(N_FRAMES, N_FREQ_BINS)
+
+    for i in range(iterations):
+        stft_complex = amplitudes * np.exp(1j * phase)
+        istft = librosa.istft(
+            stft_complex.T, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
+        )  # Takes FreqBins, Frames as input
+        stft = librosa.stft(
+            istft, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
+        )
+        phase = np.angle(stft.T)  # Compute based on Frames, FreqBins
+
+    return istft
+
+
 def amplitudes_to_wav(amplitudes, name):
     audio_channels = []
     for channel_loudness in amplitudes:
         channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
 
-        audio_signal = librosa.istft(
-            channel_amplitudes.T, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
-        )
+        audio_signal = istft_with_phase_reconstriction(channel_amplitudes)
+        # audio_signal = librosa.istft(
+        #     channel_amplitudes.T, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
+        # )
 
         audio_channels.append(audio_signal)
 
