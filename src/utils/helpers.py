@@ -227,7 +227,7 @@ def scale_normalized_db_to_amplis(loudness_data):
 
 def istft_with_phase_reconstriction(amplitudes):
     # Griffith-Lim Phase Reconstruction Algorithm
-    iterations = 200
+    iterations = 10
 
     phase = np.random.rand(N_FRAMES, N_FREQ_BINS)
 
