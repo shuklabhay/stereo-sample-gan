@@ -20,11 +20,11 @@ GLOBAL_WIN = 2**9
 GLOBAL_HOP = 2**6
 
 N_CHANNELS = 2  # Left, right
-N_FRAMES = 352
+N_FRAMES = 345
 N_FREQ_BINS = 257
 
 # Initialize STFT Class
-win = scipy.signal.windows.hann(GLOBAL_WIN)  # type: ignore
+win = scipy.signal.windows.hann(GLOBAL_WIN)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
 )
@@ -172,14 +172,8 @@ def extract_sample_amplitudes(audio_data):
         channel_mean = np.mean(channel)
         channel -= channel_mean
         stft = STFT.stft(channel)
-        # stft = signal.stft(
-        #     channel,
-        #     fs=GLOBAL_SR,
-        #     nperseg=GLOBAL_WIN,
-        #     noverlap=GLOBAL_WIN - GLOBAL_HOP,
-        # )
         # stft = librosa.stft(
-        #     channel, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
+        #     channel, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP, window="hann"
         # )  # FreqBins, Frames
         amplitudes = np.abs(stft).T
         sample_as_amplitudes.append(amplitudes)
@@ -244,20 +238,11 @@ def istft_with_phase_reconstriction(amplitudes):
         istft = STFT.istft(complex_input)
         stft = STFT.stft(istft)
         # istft = librosa.istft(
-        #     complex_input.T, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
+        #     complex_input.T, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP, window="hann"
         # )  # Takes FreqBins, Frames
-        # _, istft = signal.istft(
-        #     complex_input.T,
-        #     fs=GLOBAL_SR,
-        #     nperseg=GLOBAL_WIN,
-        #     noverlap=GLOBAL_WIN - GLOBAL_HOP,
-        # )
-        # _, _, stft = signal.stft(
-        #     istft,
-        #     fs=GLOBAL_SR,
-        #     nperseg=GLOBAL_WIN,
-        #     noverlap=GLOBAL_WIN - GLOBAL_HOP,
-        # )
+        # stft = librosa.stft(
+        #     istft, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP, window="hann"
+        # )  # FreqBins, Frames
         phase = np.angle(stft.T)  # Uses Frames, FreqBins
 
     return istft
@@ -270,7 +255,7 @@ def amplitudes_to_wav(amplitudes, name):
 
         audio_signal = istft_with_phase_reconstriction(channel_amplitudes)
         # audio_signal = librosa.istft(
-        #     channel_amplitudes.T, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
+        #     channel_amplitudes.T, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP
         # )
 
         audio_channels.append(audio_signal)

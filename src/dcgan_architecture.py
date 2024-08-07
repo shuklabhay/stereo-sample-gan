@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+# sys.path.append("../utils") # get this working & fix file structure
 from utils.helpers import N_CHANNELS, N_FRAMES, N_FREQ_BINS
 
 # Constants Constants
