@@ -1,4 +1,4 @@
-# Deep Convolution Audio Generation (WIP)
+# Deep Convolution Audio Generation
 
 Implementing Deep Convolution to generate audio using a generative network
 
