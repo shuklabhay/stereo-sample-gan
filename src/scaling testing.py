@@ -5,7 +5,7 @@ from utils.helpers import (
     scale_normalized_db_to_amplis,
 )
 
-sample = "/Users/abhayshukla/Documents/GitHub/deep-convolution-audio-generation/data/kick_samples/(OS) kick doorknocker.wav"
+sample = "/Users/abhayshukla/Documents/GitHub/deep-convolution-audio-generation/data/kick_samples/Cymatics - Sanctuary Kick 4 - G.wav"
 loudness = encode_sample(sample)
 graph_spectrogram(loudness, "before istft")
 print(loudness.shape)

@@ -23,7 +23,7 @@ N_FREQ_BINS = 257
 # Initialize STFT Object
 GLOBAL_WIN = 2**9
 GLOBAL_HOP = 2**6
-win = scipy.signal.windows.hann(GLOBAL_WIN)
+win = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=14)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
 )
@@ -195,25 +195,51 @@ def scale_normalized_db_to_amplis(normalized_loudness):
     return channel_amplis  # Amplitudes
 
 
-def istft_with_griffin_lim_reconstruction(amplitudes):
-    iterations = 100
+def lws(amplitudes):
+    iterations = 50
+    lookback, lookahead = 1, 1
     angles = np.exp(2j * np.pi * np.random.rand(*amplitudes.shape))
+
+    for _ in range(iterations):
+        S = amplitudes * angles
+        for i in range(N_FREQ_BINS):
+            start = max(0, i - lookback)
+            end = min(N_FREQ_BINS - 1, i + lookahead + 1)
+            for j in range(N_FRAMES):
+                weights = amplitudes[j, start : end + 1]
+                E = np.sum(S[j, start : end + 1] * weights)
+                angles[j, i] = E / np.abs(E)
+
+    complex_spec = amplitudes * angles
+    return complex_spec
+
+
+def istft_with_griffin_lim_reconstruction(amplitudes, preserve_signal_angles=False):
+    iterations = 100
+
+    if preserve_signal_angles == True:
+        angles = np.exp(1j * np.angle(amplitudes))
+    else:
+        angles = np.exp(2j * np.pi * np.random.rand(*amplitudes.shape))
 
     for i in range(iterations):
         full = amplitudes * angles
-        audio = STFT.istft(full.T)
-        stft = STFT.stft(audio)
+        istft = STFT.istft(full.T)
+        stft = STFT.stft(istft)
 
-        if stft.shape[1] != N_FRAMES:  # perserve shape
+        if stft.shape[1] != N_FRAMES:  # preserve shape
             stft = stft[:, :N_FRAMES]
 
-        angles = np.exp(1j * np.angle(stft.T))
+        new_angles = np.exp(1j * np.angle(stft.T))
+        angles = new_angles * (i / (i + 1)) + angles * (1 / (i + 1))
     return STFT.istft((amplitudes * angles).T)
 
 
-def istft_with_weiner_reconstruction(amplitudes):
-    complex_spec = scipy.signal.wiener(amplitudes, mysize=None, noise=0.01)
-    return STFT.istft(complex_spec.T)
+def istft_hybrid(amplitudes):
+    complex_spec = lws(amplitudes)
+    return istft_with_griffin_lim_reconstruction(
+        complex_spec, preserve_signal_angles=True
+    )
 
 
 def amplitudes_to_wav(amplitudes, name):
@@ -221,9 +247,7 @@ def amplitudes_to_wav(amplitudes, name):
     for channel_loudness in amplitudes:
         channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
 
-        # audio_signal = STFT.istft(channel_amplitudes.T)
-        # audio_signal = istft_with_griffin_lim_reconstruction(channel_amplitudes)
-        audio_signal = istft_with_weiner_reconstruction(channel_amplitudes)
+        audio_signal = istft_hybrid(channel_amplitudes)
         audio_channels.append(audio_signal)
 
     audio_stereo = np.vstack(audio_channels)
