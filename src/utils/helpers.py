@@ -211,9 +211,7 @@ def istft_with_griffin_lim_reconstruction(amplitudes):
     return STFT.istft((amplitudes * angles).T)
 
 
-def istft_with_weiner_reconstruction(
-    amplitudes,
-):
+def istft_with_weiner_reconstruction(amplitudes):
     complex_spec = scipy.signal.wiener(amplitudes, mysize=None, noise=0.01)
     return STFT.istft(complex_spec.T)
 
