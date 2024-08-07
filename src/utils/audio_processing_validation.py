@@ -5,7 +5,8 @@ from utils.helpers import (
     scale_normalized_db_to_amplis,
 )
 
-sample = "/Users/abhayshukla/Documents/GitHub/deep-convolution-audio-generation/data/kick_samples/Cymatics - Sanctuary Kick 4 - G.wav"
+# Visualize quality loss from istft
+sample = "data/kick_samples/Cymatics - Sanctuary Kick 4 - G.wav"
 loudness = encode_sample(sample)
 graph_spectrogram(loudness, "before istft")
 print(loudness.shape)
@@ -14,6 +15,6 @@ amplis = scale_normalized_db_to_amplis(loudness)
 
 amplitudes_to_wav(amplis, "test")
 
-saved = "/Users/abhayshukla/Documents/GitHub/deep-convolution-audio-generation/model/test.wav"
+saved = "model/test.wav"
 loudness2 = encode_sample(saved)
-graph_spectrogram(loudness2, "after istft")
+graph_spectrogram(loudness2, "after istft")  # something is very wrong here

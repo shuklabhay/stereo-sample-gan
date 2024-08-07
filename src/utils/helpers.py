@@ -117,7 +117,7 @@ def noise_thresh(data, threshold=10e-10):
 def scale_data_to_range(data, new_min, new_max):
     old_min, old_max = np.min(data), np.max(data)
     old_range, new_range = old_max - old_min, new_max - new_min
-    scaled_data = (data - old_min) * (new_range / old_range) + new_min
+    scaled_data = (data - old_min) * (new_range / (old_range + 1e-6)) + new_min
     scaled_data = np.round(scaled_data, decimals=6)
 
     return scaled_data
