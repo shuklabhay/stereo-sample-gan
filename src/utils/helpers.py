@@ -16,14 +16,13 @@ model_save_dir = "model"
 
 AUDIO_SAMPLE_LENGTH = 0.5  # 500 ms
 GLOBAL_SR = 44100
-GLOBAL_WIN = 2**9
-GLOBAL_HOP = 2**6
-
 N_CHANNELS = 2  # Left, right
-N_FRAMES = 345
+N_FRAMES = 352
 N_FREQ_BINS = 257
 
-# Initialize STFT Class
+# Initialize STFT Object
+GLOBAL_WIN = 2**9
+GLOBAL_HOP = 2**6
 win = scipy.signal.windows.hann(GLOBAL_WIN)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
@@ -110,7 +109,7 @@ def normalize_sample_length(audio_file_path):
     return y
 
 
-def noise_thresh(data, threshold=10e-3):
+def noise_thresh(data, threshold=10e-10):
     data[np.abs(data) < threshold] = 0
     return data
 
@@ -125,34 +124,6 @@ def scale_data_to_range(data, new_min, new_max):
 
 
 # Graphing
-def graph_freq_spectrum(left_freqs, right_freqs):
-    freqs = np.fft.fftfreq(len(left_freqs), d=1 / GLOBAL_SR)[: len(right_freqs) // 2]
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=freqs,
-            y=np.abs(left_freqs)[: len(left_freqs) // 2],  # type: ignore
-            mode="lines",
-            name="Left Channel",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=freqs,
-            y=np.abs(right_freqs)[: len(right_freqs) // 2],  # type: ignore
-            mode="lines",
-            name="Right Channel",
-        )
-    )
-    fig.update_layout(
-        title="Frequency Spectrum",
-        xaxis_title="Frequency (Hz)",
-        yaxis_title="Magnitude",
-    )
-
-    fig.show()
-
-
 def graph_spectrogram(audio_data, sample_name):
     fig = sp.make_subplots(rows=2, cols=1)
     for i in range(2):
@@ -172,9 +143,6 @@ def extract_sample_amplitudes(audio_data):
         channel_mean = np.mean(channel)
         channel -= channel_mean
         stft = STFT.stft(channel)
-        # stft = librosa.stft(
-        #     channel, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP, window="hann"
-        # )  # FreqBins, Frames
         amplitudes = np.abs(stft).T
         sample_as_amplitudes.append(amplitudes)
 
@@ -235,14 +203,8 @@ def istft_with_phase_reconstriction(amplitudes):
 
     for i in range(iterations):
         complex_input = amplitudes * np.exp(1j * phase)
-        istft = STFT.istft(complex_input)
+        istft = STFT.istft(complex_input.T)
         stft = STFT.stft(istft)
-        # istft = librosa.istft(
-        #     complex_input.T, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP, window="hann"
-        # )  # Takes FreqBins, Frames
-        # stft = librosa.stft(
-        #     istft, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP, window="hann"
-        # )  # FreqBins, Frames
         phase = np.angle(stft.T)  # Uses Frames, FreqBins
 
     return istft
@@ -254,10 +216,7 @@ def amplitudes_to_wav(amplitudes, name):
         channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
 
         audio_signal = istft_with_phase_reconstriction(channel_amplitudes)
-        # audio_signal = librosa.istft(
-        #     channel_amplitudes.T, n_fft=GLOBAL_WIN, hop_length=GLOBAL_HOP
-        # )
-
+        # audio_signal = STFT.istft(channel_amplitudes.T)
         audio_channels.append(audio_signal)
 
     audio_stereo = np.vstack(audio_channels)
