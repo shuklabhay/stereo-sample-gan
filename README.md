@@ -1,6 +1,6 @@
 # Deep Convolution Audio Generation (WIP)
 
-Implementing Deep Convolution to generate audio using generative and variational networks
+Implementing Deep Convolution to generate audio using generative and autoencoding networks
 
 ## Directories
 
