@@ -1,5 +1,6 @@
 import os
 import librosa
+import scipy
 import soundfile as sf
 import numpy as np
 import plotly.graph_objects as go
@@ -15,8 +16,17 @@ model_save_dir = "model"
 
 AUDIO_SAMPLE_LENGTH = 0.5  # 500 ms
 GLOBAL_SR = 44100
-GLOBAL_FRAME_SIZE = 2**10
-GLOBAL_HOP_LENGTH = 2**6
+N_CHANNELS = 2  # Left, right
+N_FRAMES = 352
+N_FREQ_BINS = 257
+
+# Initialize STFT Object
+GLOBAL_WIN = 2**9
+GLOBAL_HOP = 2**6
+win = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=14)
+STFT = scipy.signal.ShortTimeFFT(
+    win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
+)
 
 
 # Model Utility
@@ -24,7 +34,7 @@ def load_npy_data(file_path):
     return np.load(file_path, allow_pickle=True)
 
 
-def save_model(model, preserve_old=False):
+def save_model(model, name, preserve_old=False):
     # Clear previous models
     if preserve_old is not True:
         for filename in os.listdir(model_save_dir):
@@ -34,7 +44,7 @@ def save_model(model, preserve_old=False):
     # Save model
     torch.save(
         model.state_dict(),
-        f"{model_save_dir}/generator_final_model.pth",
+        f"{model_save_dir}/{name}.pth",
     )
     print(f"Model Saved")
 
@@ -99,75 +109,21 @@ def normalize_sample_length(audio_file_path):
     return y
 
 
-def noise_thresh(data):
-    threshold = 10e-3
-
+def noise_thresh(data, threshold=10e-10):
     data[np.abs(data) < threshold] = 0
     return data
 
 
-def data_loudness_normalize(audio_data):
-    # Normalizes from -1 to 1
-    min_val = np.min(audio_data)
-    max_val = np.max(audio_data)
-    normalized_audio_data = (audio_data - min_val) / (max_val - min_val + 1e-6) * 2 - 1
-    rounded_audio_data = np.round(normalized_audio_data, decimals=6)
-    return rounded_audio_data
+def scale_data_to_range(data, new_min, new_max):
+    old_min, old_max = np.min(data), np.max(data)
+    old_range, new_range = old_max - old_min, new_max - new_min
+    scaled_data = (data - old_min) * (new_range / (old_range + 1e-6)) + new_min
+    scaled_data = np.round(scaled_data, decimals=6)
 
-
-def clean_and_scale_amplitudes(channel_amps):
-    channel_amps = noise_thresh(channel_amps)
-    log_values = 20 * np.log10(np.abs(channel_amps) + 1e-6)
-    log_values = log_values + 120  # Offset by minimum value
-    normalized_loudness = data_loudness_normalize(log_values)
-
-    return normalized_loudness
-
-
-def clean_and_scale_generated(audio_data):
-    new_min = 0
-    new_max = 160
-
-    old_min, old_max = np.min(audio_data), np.max(audio_data)
-    scaled_audio_data = (audio_data - old_min) / (old_max - old_min) * (
-        new_max - new_min
-    ) + new_min
-
-    scaled_audio_data -= 120
-    amp_audio_data = 10 ** (scaled_audio_data / 20)
-
-    return amp_audio_data  # Amplitudes
+    return scaled_data
 
 
 # Graphing
-def graph_freq_spectrum(left_freqs, right_freqs):
-    freqs = np.fft.fftfreq(len(left_freqs), d=1 / GLOBAL_SR)[: len(right_freqs) // 2]
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=freqs,
-            y=np.abs(left_freqs)[: len(left_freqs) // 2],  # type: ignore
-            mode="lines",
-            name="Left Channel",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=freqs,
-            y=np.abs(right_freqs)[: len(right_freqs) // 2],  # type: ignore
-            mode="lines",
-            name="Right Channel",
-        )
-    )
-    fig.update_layout(
-        title="Frequency Spectrum",
-        xaxis_title="Frequency (Hz)",
-        yaxis_title="Magnitude",
-    )
-
-    fig.show()
-
-
 def graph_spectrogram(audio_data, sample_name):
     fig = sp.make_subplots(rows=2, cols=1)
     for i in range(2):
@@ -186,10 +142,7 @@ def extract_sample_amplitudes(audio_data):
     for channel in audio_data:
         channel_mean = np.mean(channel)
         channel -= channel_mean
-
-        stft = librosa.stft(
-            channel, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
-        )
+        stft = STFT.stft(channel)
         amplitudes = np.abs(stft).T
         sample_as_amplitudes.append(amplitudes)
 
@@ -198,11 +151,20 @@ def extract_sample_amplitudes(audio_data):
     return sample_as_amplitudes  # (2 Channels, ? Frames, ? FreqBins)
 
 
+def scale_amplis_to_normalized_db(channel_amplis):
+    channel_amplis = scale_data_to_range(channel_amplis, 0, 100)
+
+    channel_amplis = noise_thresh(channel_amplis)
+    channel_loudness = 20 * np.log10(np.abs(channel_amplis) + 1e-6)
+    normalized_loudness = scale_data_to_range(channel_loudness, -1, 1)
+    return normalized_loudness
+
+
 def encode_sample(sample_path):
     normalized_y = normalize_sample_length(sample_path)
 
     amp_data = extract_sample_amplitudes(normalized_y)
-    loudness_data = clean_and_scale_amplitudes(amp_data)
+    loudness_data = scale_amplis_to_normalized_db(amp_data)
     return loudness_data
 
 
@@ -225,17 +187,67 @@ def encode_sample_directory(sample_dir, silent=True):
 
 
 # Decoding audio
+def scale_normalized_db_to_amplis(normalized_loudness):
+    unnormalized_loudness_data = scale_data_to_range(normalized_loudness, -120, 40)
+    channel_amplis = np.power(10, (unnormalized_loudness_data / 20))
+    channel_amplis = noise_thresh(channel_amplis)
+
+    return channel_amplis  # Amplitudes
+
+
+def lws(amplitudes):
+    iterations = 50
+    lookback, lookahead = 1, 1
+    angles = np.exp(2j * np.pi * np.random.rand(*amplitudes.shape))
+
+    for _ in range(iterations):
+        S = amplitudes * angles
+        for i in range(N_FREQ_BINS):
+            start = max(0, i - lookback)
+            end = min(N_FREQ_BINS - 1, i + lookahead + 1)
+            for j in range(N_FRAMES):
+                weights = amplitudes[j, start : end + 1]
+                E = np.sum(S[j, start : end + 1] * weights)
+                angles[j, i] = E / np.abs(E)
+
+    complex_spec = amplitudes * angles
+    return complex_spec
+
+
+def istft_with_griffin_lim_reconstruction(amplitudes, preserve_signal_angles=False):
+    iterations = 100
+
+    if preserve_signal_angles == True:
+        angles = np.exp(1j * np.angle(amplitudes))
+    else:
+        angles = np.exp(2j * np.pi * np.random.rand(*amplitudes.shape))
+
+    for i in range(iterations):
+        full = amplitudes * angles
+        istft = STFT.istft(full.T)
+        stft = STFT.stft(istft)
+
+        if stft.shape[1] != N_FRAMES:  # preserve shape
+            stft = stft[:, :N_FRAMES]
+
+        new_angles = np.exp(1j * np.angle(stft.T))
+        angles = new_angles * (i / (i + 1)) + angles * (1 / (i + 1))
+    return STFT.istft((amplitudes * angles).T)
+
+
+def istft_hybrid(amplitudes):
+    complex_spec = lws(amplitudes)
+    return istft_with_griffin_lim_reconstruction(
+        complex_spec, preserve_signal_angles=True
+    )
+
+
 def amplitudes_to_wav(amplitudes, name):
     audio_channels = []
     for channel_loudness in amplitudes:
-        channel_amplitudes = clean_and_scale_generated(channel_loudness)
+        channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
 
-        audio_signal = librosa.istft(
-            channel_amplitudes.T,
-            hop_length=GLOBAL_HOP_LENGTH,
-            win_length=GLOBAL_FRAME_SIZE,
-        )
-
+        audio_signal = istft_hybrid(channel_amplitudes)
         audio_channels.append(audio_signal)
 
     audio_stereo = np.vstack(audio_channels)

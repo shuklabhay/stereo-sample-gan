@@ -42,7 +42,7 @@ nbconvert==7.16.4
 nbformat==5.10.4
 networkx==3.3
 numba==0.60.0
-numpy==2.0.1
+numpy==1.26.4 #Librosa Requirement
 packaging==24.1
 pandocfilters==1.5.1
 parso==0.8.4
