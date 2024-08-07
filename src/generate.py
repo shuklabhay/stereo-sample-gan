@@ -1,5 +1,5 @@
 import torch
-from dcgan_architecture import Generator, LATENT_DIM
+from architecture import Generator, LATENT_DIM
 from utils.helpers import amplitudes_to_wav, get_device, graph_spectrogram
 
 # Initialize Generator

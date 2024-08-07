@@ -3,12 +3,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
-from dcgan_architecture import (
+from architecture import (
     BATCH_SIZE,
     Discriminator,
     Generator,
 )
-from dcgan_train import training_loop
+from train import training_loop
 from utils.helpers import (
     compiled_data_path,
     get_device,
