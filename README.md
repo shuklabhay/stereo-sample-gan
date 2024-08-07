@@ -1,9 +1,9 @@
 # Deep Convolution Audio Generation (WIP)
 
-Implementing Deep Convolution to generate audio using generative and autoencoding networks
+Implementing Deep Convolution to generate audio using a generative network
 
 ## Directories
 
-- `model`: Model save and generated output location
-- `src`: Source code for models
+- `model`: Trained model and generated audio
+- `src`: Model source code
   - `utils`: Model and data utilities

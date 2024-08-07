@@ -1,7 +1,6 @@
 import torch
-
+from architecture import LATENT_DIM
 from utils.helpers import save_model
-from dcgan_architecture import LATENT_DIM
 
 
 N_EPOCHS = 10
