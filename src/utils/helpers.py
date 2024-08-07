@@ -108,13 +108,13 @@ def noise_thresh(data, threshold=10e-3):
     return data
 
 
-def normalize_audio_scaling(audio_data):
-    # Normalizes audio to be between -1 and 1
-    min_val = np.min(audio_data)
-    max_val = np.max(audio_data)
-    normalized_audio_data = (audio_data - min_val) / (max_val - min_val + 1e-6) * 2 - 1
-    rounded_audio_data = np.round(normalized_audio_data, decimals=6)
-    return rounded_audio_data
+def scale_data_to_range(data, new_min, new_max):
+    old_min, old_max = np.min(data), np.max(data)
+    old_range, new_range = old_max - old_min, new_max - new_min
+    scaled_data = (data - old_min) * (new_range / old_range) + new_min
+    scaled_data = np.round(scaled_data, decimals=6)
+
+    return scaled_data
 
 
 # Graphing
@@ -177,11 +177,11 @@ def extract_sample_amplitudes(audio_data):
 
 
 def scale_amplis_to_normalized_db(channel_amplis):
-    channel_amplis = noise_thresh(channel_amplis)
-    graph_spectrogram(channel_amplis, "original amplis")
-    channel_loudness = 20 * np.log10(np.abs(channel_amplis) + 1e-6)  # Avoid log0 error
-    normalized_loudness = normalize_audio_scaling(channel_loudness)
+    channel_amplis = scale_data_to_range(channel_amplis, 0, 100)
 
+    channel_amplis = noise_thresh(channel_amplis)
+    channel_loudness = 20 * np.log10(np.abs(channel_amplis) + 1e-6)
+    normalized_loudness = scale_data_to_range(channel_loudness, -1, 1)
     return normalized_loudness
 
 
@@ -212,17 +212,12 @@ def encode_sample_directory(sample_dir, silent=True):
 
 
 # Decoding audio
-def scale_normalized_db_to_amplis(loudness_data):
-    new_min, new_max = -120, 40
+def scale_normalized_db_to_amplis(normalized_loudness):
+    unnormalized_loudness_data = scale_data_to_range(normalized_loudness, -120, 40)
+    channel_amplis = np.power(10, (unnormalized_loudness_data / 20))
+    channel_amplis = noise_thresh(channel_amplis)
 
-    old_min, old_max = np.min(loudness_data), np.max(loudness_data)
-    old_range, new_range = old_max - old_min, new_max - new_min
-    scaled_loudness_data = (loudness_data - old_min) * (new_range / old_range) + new_min
-
-    amp_data = np.power(10, (scaled_loudness_data / 20))
-    amp_data = noise_thresh(amp_data)
-
-    return amp_data  # Amplitudes
+    return channel_amplis  # Amplitudes
 
 
 def istft_with_phase_reconstriction(amplitudes):
@@ -249,10 +244,10 @@ def amplitudes_to_wav(amplitudes, name):
     for channel_loudness in amplitudes:
         channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
 
-        audio_signal = istft_with_phase_reconstriction(channel_amplitudes)
-        # audio_signal = librosa.istft(
-        #     channel_amplitudes.T, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
-        # )
+        # audio_signal = istft_with_phase_reconstriction(channel_amplitudes)
+        audio_signal = librosa.istft(
+            channel_amplitudes.T, n_fft=GLOBAL_FRAME_SIZE, hop_length=GLOBAL_HOP_LENGTH
+        )
 
         audio_channels.append(audio_signal)
 
