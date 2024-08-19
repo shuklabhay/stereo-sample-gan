@@ -17,12 +17,12 @@ model_save_dir = "model"
 AUDIO_SAMPLE_LENGTH = 0.5  # 500 ms
 GLOBAL_SR = 44100
 N_CHANNELS = 2  # Left, right
-N_FRAMES = 352
+N_FRAMES = 176
 N_FREQ_BINS = 257
 
 # Initialize STFT Object
 GLOBAL_WIN = 2**9
-GLOBAL_HOP = 2**6
+GLOBAL_HOP = 2**7
 win = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=14)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
