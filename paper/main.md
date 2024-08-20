@@ -18,16 +18,16 @@ This investigation specifically seeks to determine how feasible it can be to use
 
 ### Data Collection and Processing
 
-Training data is first sourced from digital production “sample packs” compiled by various parties. These packs contain various amounts of analog, cinematic, heavy, and edm kick drum samples, providing a wholstic yet random selection of kick drums that loosely contain the same characteristics.
+Training data is first sourced from digital production “sample packs” compiled by various parties. These packs contain a variety of kick drum samples (analog, cinematic, beatbox, heavy, edm, etc), providing a wholstic selection of samples that for the most part include a set of "defining characteristics" of a kick drum.
 
-The goal of this model is to replicate the following characteristics of a kick drum:
+The goal of this model is to replicate the following characteristics of a kick drum: [graphic kick drum spectrogram]
 
 - A specific length audio sample
 - An atonal transient “click” at the beginning of the generated audio incorporating most of the frequency spectrum
 - A sustained, decaying low "rumble" following the transient of the sample
-- The overall "decaying" nature of a kick drum
+- An overall "decaying" nature
 
-This work uses 7856 data points split into batches of eight. Each audio sample is normalized to a length of 500 miliseconds and then
+The training data used is a compilation of 7856 audio samples split into batches of 8. Each sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform, returning a representation of audio as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins.
 
 old:
 Every audio clip is normalized to 500 ms and passed into a Short-time Fourier Transform, returning amplitudes for frequency bins at every frame of audio for each channel. To amplify audio features, the amplitude data is then passed through a noise floor, decibel scaled, and rescaled to be between -1 and 1.
