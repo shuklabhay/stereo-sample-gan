@@ -8,19 +8,17 @@ Continuation of UCLA COSMOS 2024 Research
 
 ## Introduction
 
-Kick drums are an integral part of digital audio production, the foundational element of almost every song and drumset. As a result, finding a large quantitity of high quality kick drum samples are often
+Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1], but requiring aditional optimizations for audio generation [2]. To generate high quality audio, models must capture temporal relationships and spectral characteristcs, and be able to replicate it without inconsistencies that could go unnoticed in an image and be apparent in audio. Accounting for these complexities requires additional modifications and straying away from the pure DCGAN architecture.
 
-The characteristics of the audio we're looking to replicate are as follows:
+Much of existing audio generation machine learning models implement other forms of GANs [cite] [add more onto this, use examples like wavegan and stuff], usually implementing a more complex architectures based off of Deep Convolution. This work attemps to recognize the limitations of audio representation generation using **only** Deep Convolution in a Generative Network.
+
+Kick drums are an integral part of digital audio production, the foundational element of almost every song and drumset. Due to their importance, finding a large quantitity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment. The characteristics of the audio we're looking to replicate are as follows:
 
 - An audio sample of 500 miliseconds long
 - An with atonal transient “click” spanning a larger area of the frequency spectrum
 - A sustained, decaying low "rumble" following the transient of the sample
 
-Generative Adversarial Networks (GANs) have changed the landscape of the machine learning community, reaching new bounds in image generation [cite] and more recently natural language and audio generation [cite]. These audio generative models often employ Deep Convolutional GANs (DCGANs) to create spectrogram representations of audio.
-
-This work aims specifically to generate kick drums using a similar DCGAN approach. [note that not using wgan or anything like that just using the dcgan how can i generate audio is it possible to generate kick drums]
-
-This investigation specifically seeks to determine is a DCGAN Architecture can learn to recognize and replicate the spatial patterns and temporal patterns of an image representation kick drum.
+This investigation specifically seeks to determine how feasible it can be to use a DCGAN Architecture to recognize and replicate the spatial patterns and temporal patterns of an image representation of a kick drum.
 
 ## Related work
 
@@ -36,8 +34,11 @@ compare w/ wavegan?? ig
 
 ## References
 
-<a id="1">[1]</a> DCGAN paper methodology structure etc
+<a id="1">[1]</a> CNN based GAN
 https://arxiv.org/abs/1511.06434
+
+<a id="2">[2]</a> GAN audio generation
+https://arxiv.org/abs/1802.04208
 
 similar result to me
 https://openaccess.thecvf.com/content_CVPR_2020/papers/Durall_Watch_Your_Up-Convolution_CNN_Based_Generative_Deep_Neural_Networks_Are_CVPR_2020_paper.pdf
