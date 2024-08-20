@@ -10,13 +10,13 @@ Continuation of UCLA COSMOS 2024 Research
 
 Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1], but requiring aditional optimizations for audio generation [2]. To generate high quality audio, models must capture temporal relationships and spectral characteristcs, and be able to replicate it without inconsistencies that could go unnoticed in an image and be apparent in audio. Accounting for these complexities requires additional modifications and straying away from the pure DCGAN architecture. This work attempts to recognize the limitations of audio representation generation using **only** Deep Convolution in a Generative Network.
 
-This project uses kick drums as the sound to generate since they best fit the criteria of complexity, tonality, length, and temporal patterns. Kick drums are also an integral part of digital audio production and the foundational element of almost every song and drumset. Due to their importance, finding a large quantity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment.
+Kick drums are used here as the sound to generate because they best fit the criteria of complexity, tonality, length, and temporal patterns. They are simple sounds that have the potential to have lots of variance. Kick drums are also an integral part of digital audio production and the foundational element of almost every song and drumset. Due to their importance, finding a large quantity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment.
 
-This investigation specifically seeks to determine how feasible it can be to use a DCGAN Architecture to recognize and replicate the spatial patterns and temporal patterns of an image representation of a kick drum. We will also experiment with pure sine wave validation at one frequency.
+This investigation primarily seeks to determine how feasible it can be to use purely a DCGAN Architecture to recognize and replicate the spatial patterns and temporal patterns of an image representation of a kick drum. We will also experiment with generating pure sine waves as a means of validation.
 
 ## Methodology
 
-### Data Collection and Processing
+### Data Collection
 
 Training data is first sourced from digital production “sample packs” compiled by various parties. These packs contain a variety of kick drum samples (analog, cinematic, beatbox, heavy, edm, etc), providing a wholstic selection of samples that for the most part include a set of "defining characteristics" of a kick drum.
 
@@ -27,10 +27,13 @@ The goal of this model is to replicate the following characteristics of a kick d
 - A sustained, decaying low "rumble" following the transient of the sample
 - An overall "decaying" nature
 
+### Feature Extraction/Encoding
+
 The training data used is a compilation of 7856 audio samples split into batches of 8. Each sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform, returning a representation of audio as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins.
 
-old:
-Every audio clip is normalized to 500 ms and passed into a Short-time Fourier Transform, returning amplitudes for frequency bins at every frame of audio for each channel. To amplify audio features, the amplitude data is then passed through a noise floor, decibel scaled, and rescaled to be between -1 and 1.
+While amplitude data is important, this data is by nature skewed towards lower frequencies which contain more intensity. To account for this, a few things are done. First, after extracting channel amplitudes, the whole tensor of data is scaled to be between 0 and 100. The data is then passed through a noise threshold where all values under 10e-10 are set to zero and this normalized, noise gated amplitude information is converted into a logarithmic, decibal scale. The decibal scale describes percieved loudness instead of intensity, displaying audio information in a more uniform way relative to the entire frequency spectrum. This data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
+
+[show amp data vs loudness data graph]
 
 ### Model Architecture
 
