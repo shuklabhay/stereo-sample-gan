@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from architecture import LATENT_DIM
 from utils.helpers import (
+    N_FRAMES,
     average_spectrogram_path,
     graph_spectrogram,
     load_npy_data,
@@ -26,23 +27,23 @@ def calculate_decay_penalty(audio_data):
     return decay_penalty
 
 
-# def calculate_periodicity_penalty(audio_data):
-#     current_batch_size = audio_data.shape[0]
-#     reshaped_audio = audio_data.reshape(current_batch_size, -1, N_FRAMES)
-#     autocorr = torch.tensor([]).to(audio_data.device)
-#     for i in range(current_batch_size):
-#         sample = reshaped_audio[i]
-#         sample_autocorr = F.conv1d(
-#             sample.unsqueeze(0),
-#             sample.flip(-1).unsqueeze(0),
-#             padding=sample.shape[-1] - 1,
-#         )
-#         autocorr = torch.cat((autocorr, sample_autocorr), dim=0)
+def calculate_periodicity_penalty(audio_data):
+    current_batch_size = audio_data.shape[0]
+    reshaped_audio = audio_data.reshape(current_batch_size, -1, N_FRAMES)
+    autocorr = torch.tensor([]).to(audio_data.device)
+    for i in range(current_batch_size):
+        sample = reshaped_audio[i]
+        sample_autocorr = F.conv1d(
+            sample.unsqueeze(0),
+            sample.flip(-1).unsqueeze(0),
+            padding=sample.shape[-1] - 1,
+        )
+        autocorr = torch.cat((autocorr, sample_autocorr), dim=0)
 
-#     autocorr = autocorr / autocorr.max(dim=2, keepdim=True)[0]
-#     periodicity_penalty = autocorr[:, :, 50:].mean()
+    autocorr = autocorr / autocorr.max(dim=2, keepdim=True)[0]
+    periodicity_penalty = autocorr[:, :, 50:].mean()
 
-#     return periodicity_penalty
+    return periodicity_penalty
 
 
 # Training
@@ -55,8 +56,8 @@ def train_epoch(
     optimizer_D,
     device,
 ):
-    decay_penalty_weight = 0.01
-    periodicity_penalty_weight = 0.01
+    decay_penalty_weight = 0.1
+    periodicity_penalty_weight = 0.1
 
     generator.train()
     discriminator.train()
