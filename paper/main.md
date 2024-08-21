@@ -7,12 +7,13 @@ Continuation of UCLA COSMOS 2024 Research
 ## Abstract
 
 \_\_\_GENERATE ALL IMAGES NEWLY BC NEW STUFF OR WTV JST LIKE ALL IMAGES USED DONT GO OFF OLD IMAGES JUST GEENRATE EVERYTHING MYSELF
+\_\_\_ALSO TRY CHANING ARCHITECURE TO BE 8 LAYERS AND HAVE OUTPUT 256,256 BEFORE UPSCALE
 
 ## Introduction
 
-Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs. High quality audio generation models must be able to capture and replicate sophisticated temporal relationships and spectral characteristcs, in a consistent manner. Accounting for these complexities requires additional modifications and straying away from the pure DCGAN architecture, as seen implemented in WaveGAN [2] and GANSynth[3]. This work attempts to represent audio information as images and then recognize the limitations of audio representation image generation using **only** a Deep Convolutional Generative Network.
+Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs. High quality audio generation models must be able to capture and replicate sophisticated temporal relationships and spectral characteristcs, in a consistent manner. Accounting for these complexities requires countless modifications and optimizations, for example as seen implemented in WaveGAN[2], a project this work was inspired by. This work attempts to recognize the limitations of audio representation generation with a Deep Convolutional Generative Network known to work with image generation.
 
-Kick drums are used here as the sound to generate because they best fit the criteria of complexity, tonality, length, and temporal patterns. They are simple sounds that have the potential to have lots of variance. Kick drums are also an integral part of digital audio production and the foundational element of almost every song and drumset. Due to their importance, finding a large quantity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment.
+Considerations for sounds to generate were kick drums, snare drums, full drum loops, and synth impules. This work attempts to generate kick drums because they best met the criteria of containing some temporal patterns but also not being too complex of a sound and also being a quick impulse. Kick drums are simple sounds that have the potential to have some, but not an infinite amount of possible variance. Kick drums are also an integral part of digital audio production and the foundational element of almost every song and drumset. Due to their importance, finding a large quantity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment.
 
 This investigation primarily seeks to determine how feasible it can be to use purely a DCGAN Architecture to recognize and replicate the spatial patterns and temporal patterns of an image representation of a kick drum. We will also experiment with generating pure sine waves as a means of validation.
 
@@ -37,13 +38,13 @@ While amplitude data is important, this data is by nature skewed towards lower f
 
 [show amp data vs loudness data spectrogram]
 
-Generated audio representaions are a tensor of the same shape with values between -1 and 1. This data is scaled to be between -120 and 40, then passed into an exponential function converting the data back to "amplitudes" and finally noise gated. This amplitude information is then passed into a griffin-lim phase reconstruction algorithm [3] and finally converted to an audio format.
+Generated audio representaions are a tensor of the same shape with values between -1 and 1. This data is scaled to be between -120 and 40, then passed into an exponential function converting the data back to "amplitudes" and finally noise gated. This amplitude information is then passed into a griffin-lim phase reconstruction algorithm[3] and finally converted to an audio format.
 
 ## Implementation
 
-### Model Architecture
+The model itself is is a standard DCGAN model[1] with 9 Convolution Transpose layers in the Generator and 9 Convolution layers in the Discriminator. There are two variations between this work's implementation of a DCGAN and the standard DCGAN. First, this approach uses an upsampling layer at the end of the end of the generator to reshape the generated values from (512, 512) to (176, 257), frames of audio by frequency bins. Frames by frequency bins are also upscaled to (512, 512) at the begining of the Discriminator phase. The Discriminatoe phase also includes a Phase Shuffle Layer after every convolution, as used in WaveGAN[2], meant to shuffle the phase of outputs and prevent learning to create random periodic values.
 
-### Training
+This model is trained
 
 ## Results
 
@@ -57,18 +58,20 @@ audio waveforms very periodic, need to do something so it doesnt learn to just g
 
 ### Model Shortcomings
 
-### Note: istft
+### iSTFT Shortcomings
 
-### outputs/contributions/whatever
+### Contributions
 
 ## Conclusion
+
+also talk abt how transformer based audio gen is happening, audio gen process being made
 
 ## References
 
 <a id="1">[1]</a> CNN based GAN
 https://arxiv.org/abs/1511.06434
 
-<a id="2">[2]</a> GAN audio generation
+<a id="2">[2]</a> GAN audio generation (WaveGAN)
 https://arxiv.org/abs/1802.04208
 
 <a id="3">[3]</a> Griffin Lim
