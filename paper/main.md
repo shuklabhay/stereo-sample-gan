@@ -1,6 +1,8 @@
 # Kick it Out: Limitations to Two Channel Audio Generation With a Deep Convolution Generative Network
 
-#todo: after written, rewrite everything with like the better clearer idea of like bigger differences of what is happening here that's more novel and new result or whatever- like the two channell gen not happening whereas specgan 1 channel works or whatever like figure out better whast novel here and whatever THEN can send it out to whoever whaytever
+#todo: after written, rewrite everything with like the better clearer idea of like bigger differences of what is happening here that's more novel and new result or whatever- like the two channell gen not happening whereas specgan 1 channel works or whatever like figure out better whast novel here and whatever THEN can send it out to whoever whaytever like make clear the goals are to haev the like stero signal and the kick drum specifically and pure ish dcgan.
+
+REWRITE THE FIRST FEW PARAGRAPHS TO REFLECT THIS LIKE BIGGER DIFFERENCE THING LIKE MY OVERALL GOALS BEING DIFF THAN USE CASE FOR SPECGAN THEN WRITE ABT RESULTS IM DONE TRYING TO FIX THIS SHIT LOL
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
@@ -9,7 +11,6 @@ Continuation of UCLA COSMOS 2024 Research
 ## Abstract
 
 \_\_\_GENERATE ALL IMAGES NEWLY BC NEW STUFF OR WTV JST LIKE ALL IMAGES USED DONT GO OFF OLD IMAGES JUST GEENRATE EVERYTHING MYSELF
-\_\_\_ALSO TRY CHANING ARCHITECURE TO BE 8 LAYERS AND HAVE OUTPUT 256,256 BEFORE UPSCALE
 
 ## Introduction
 
@@ -46,9 +47,9 @@ Generated audio representaions are a tensor of the same shape with values betwee
 
 ## Implementation
 
-The model itself is is a standard DCGAN model[1] with two slight modifcations, upsampling and phase shuffling. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, batch normalization layer, and ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization, batch normalization layer, leaky ReLU activation, and phase shuffle layer. After convolution, the probability of an audio clip audio being real is returned using a sigmoid function.
+The model itself is is a standard DCGAN model[1] with two slight modifcations, upsampling and phase shuffling. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation.
 
-This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 8. The loss function is Binary Cross Entropy with Logit Loss and both the generator and discriminator use the Adam optimizer with seperate learning rates. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and label smoothing is also applied.
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 8. The loss function is Binary Cross Entropy with Logit Loss and both the generator and discriminator use the Adam optimizer with seperate learning rates. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and label smoothing is also applied to prevent overconfidence.
 
 ## Results
 
@@ -56,14 +57,29 @@ This work uses 80% of the dataset as training data and 20% as validation with al
 
 In mostly every training loop, generator and discriminator loss always tends to flatline around epoch 3-5, followedby discriminator loss either also flatlining or marinally reducing. Validation loss also consistently remains around the same amount or increases.
 
-When analyzing generated audio, the model appears to learning to create long horizontal lines spanning the entire sample. Each generated output also appears contain little to no differences between each other. The model fails in learning both the spatial and temporal patterns that any kick drum contains.
+When analyzing generated audio, it is apparent that the model is creating some periodic noise pattern with some sort of sound in the middle of the frequency spectrum. Each generated output also appears contain little to no differences between each other.
 ![Output spectrogram](static/model-output.png)
 
-While natural/virtual images contain overarching patterns, audio data is usualy more periodic, thus the generator is able to learn to generate random lines and the discriminator believes it to be kick drums.
+intuition/reasoning idea for why it doesnt work (maybe?)
+
+- decaying shape exists but details of shape vary, some samples decay longer some decay smapper
+- subtle complexities stop gan from perfect replication (one sample w/ super long decay makes it question all other short decay samples?? figure out if this is fr)
+- discrim could be fousing on
+
+no this doesnt make sense
+This periodic audio could be generating because of how DCGANs comprehend information. Convolution as process is more than capable of understanding patterns in local areas, in fact this was the very problem they were designed to solve [cite], and convolution can equally well understand how "local" patterns change over the whole image. With this intution, DCGANs should be more than fine generating images, but audio data often displays more usualy more periodicity and uniformity. These factors make it tougher
+
+While natural/virtual images contain patterns and textures, audio data is usualy more periodic and uniform.
+
+As a result, a discriminator could be fooled into believing random periodic noisy textures are the same as a kick drum because it can't properly understand the spatial and temporal correlations between the different parts of a kick drum (see Data Manipulation: Collection.) This stage is unfortunately where pure DCGAN image audio representation generation falls apart, it's simply not possible for these models to understamd.
 
 [show learned kernels]
 
 audio waveforms very periodic, need to do something so it doesnt learn to just generate fake lines
+
+proposed model collapse fix only makes worse
+
+for it to work need to optimize for kind of data, cant just use image gen
 
 ### Sine Validation
 

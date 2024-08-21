@@ -19,5 +19,4 @@ with torch.no_grad():
 
 generated_output = generated_output.squeeze().numpy()
 print("Generated output shape:", generated_output.shape)
-graph_spectrogram(generated_output, "Generated Sample")
 amplitudes_to_wav(generated_output, "DCGAN_generated_audio")

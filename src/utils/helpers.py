@@ -124,7 +124,7 @@ def scale_data_to_range(data, new_min, new_max):
 
 
 # Graphing
-def graph_spectrogram(audio_data, sample_name):
+def graph_spectrogram(audio_data, sample_name, graphScale=10):
     fig = sp.make_subplots(rows=2, cols=1)
     for i in range(2):
         channel = audio_data[i]
@@ -148,8 +148,7 @@ def graph_spectrogram(audio_data, sample_name):
                 title="Loudness",
                 titleside="right",
                 ticksuffix="",
-                x=1.02,
-                dtick=0.2,
+                dtick=graphScale,
             ),
         )
     )
@@ -245,12 +244,17 @@ def istft_hybrid(amplitudes):
 
 def amplitudes_to_wav(amplitudes, name):
     audio_channels = []
-    for channel_loudness in amplitudes:
-        channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
+    loudness_info = []
 
+    for channel_loudness in amplitudes:
+        channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
+        loudness_info.append(channel_db_loudnes)
+
+        channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
         audio_signal = istft_hybrid(channel_amplitudes)
         audio_channels.append(audio_signal)
 
+    graph_spectrogram(loudness_info, "Generated Audio Loudness (db)", 10)
     audio_stereo = np.vstack(audio_channels)
 
     output_path = os.path.join(audio_output_dir, f"{name}.wav")
