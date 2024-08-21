@@ -1,5 +1,5 @@
 from utils.helpers import (
-    amplitudes_to_wav,
+    normalized_db_to_wav,
     encode_sample,
     graph_spectrogram,
     scale_normalized_db_to_amplis,
@@ -13,7 +13,7 @@ print(loudness.shape)
 
 amplis = scale_normalized_db_to_amplis(loudness)
 
-amplitudes_to_wav(amplis, "test")
+normalized_db_to_wav(amplis, "test")
 
 saved = "model/test.wav"
 loudness2 = encode_sample(saved)

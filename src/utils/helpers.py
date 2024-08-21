@@ -11,6 +11,7 @@ import torch
 audio_data_dir = "data/kick_samples"
 sinetest_data_dir = "data/sine_test"
 compiled_data_path = "data/compiled_data.npy"
+average_spectrogram_path = "data/average_spectrogram.npy"
 audio_output_dir = "model"
 model_save_dir = "model"
 
@@ -89,6 +90,12 @@ def generate_sine_impules():
 
         save_path = os.path.join(sinetest_data_dir, f"{freq:.2f}.wav")
         sf.write(save_path, audio_signal, GLOBAL_SR)
+
+
+def compute_average_spectrogram():
+    spectrogram_data = load_npy_data(compiled_data_path)
+    average_spectrogram = np.mean(spectrogram_data, axis=0, dtype=np.float32)
+    save_freq_info(average_spectrogram, average_spectrogram_path)
 
 
 def normalize_sample_length(audio_file_path):
@@ -236,13 +243,7 @@ def istft_with_griffin_lim_reconstruction(amplitudes, preserve_signal_angles=Fal
     return STFT.istft((amplitudes * angles).T)
 
 
-def istft_hybrid(amplitudes):
-    return istft_with_griffin_lim_reconstruction(
-        amplitudes, preserve_signal_angles=True
-    )
-
-
-def amplitudes_to_wav(amplitudes, name):
+def normalized_db_to_wav(amplitudes, name):
     audio_channels = []
     loudness_info = []
 
@@ -251,7 +252,7 @@ def amplitudes_to_wav(amplitudes, name):
         loudness_info.append(channel_db_loudnes)
 
         channel_amplitudes = scale_normalized_db_to_amplis(channel_loudness)
-        audio_signal = istft_hybrid(channel_amplitudes)
+        audio_signal = istft_with_griffin_lim_reconstruction(channel_amplitudes)
         audio_channels.append(audio_signal)
 
     graph_spectrogram(loudness_info, "Generated Audio Loudness (db)", 10)
