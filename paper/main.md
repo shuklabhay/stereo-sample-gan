@@ -1,5 +1,7 @@
 # Kick it Out: Limitations to Two Channel Audio Generation With a Deep Convolution Generative Network
 
+use attention, use special loss calcs, if i get this working then BOOM make it about kick generation using super optimized deep conv
+
 #todo: after written, rewrite everything with like the better clearer idea of like bigger differences of what is happening here that's more novel and new result or whatever- like the two channell gen not happening whereas specgan 1 channel works or whatever like figure out better whast novel here and whatever THEN can send it out to whoever whaytever like make clear the goals are to haev the like stero signal and the kick drum specifically and pure ish dcgan.
 
 REWRITE THE FIRST FEW PARAGRAPHS TO REFLECT THIS LIKE BIGGER DIFFERENCE THING LIKE MY OVERALL GOALS BEING DIFF THAN USE CASE FOR SPECGAN THEN WRITE ABT RESULTS IM DONE TRYING TO FIX THIS SHIT LOL
@@ -49,7 +51,8 @@ Generated audio representaions are a tensor of the same shape with values betwee
 
 The model itself is is a standard DCGAN model[1] with two slight modifcations, upsampling and phase shuffling. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation.
 
-This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 8. The loss function is Binary Cross Entropy with Logit Loss and both the generator and discriminator use the Adam optimizer with seperate learning rates. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and label smoothing is also applied to prevent overconfidence.
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. The loss function is Binary Cross Entropy with Logit Loss and both the generator and discriminator use the Adam optimizer with seperate learning rates. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and label smoothing is also applied to prevent overconfidence.
+TALK ABOUT CUSTOM LOSS METRICS
 
 ## Results
 

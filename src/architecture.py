@@ -76,6 +76,7 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             nn.BatchNorm2d(256),
             nn.Conv2d(256, 1, kernel_size=4, stride=2, padding=1),
+            nn.Flatten(),
             nn.Sigmoid(),
         )
 

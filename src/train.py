@@ -1,6 +1,7 @@
 import torch
-from architecture import LATENT_DIM
-from utils.helpers import save_model
+import torch.nn.functional as F
+from architecture import BATCH_SIZE, LATENT_DIM
+from utils.helpers import N_FRAMES, graph_spectrogram, save_model, scale_data_to_range
 
 
 N_EPOCHS = 10
@@ -8,6 +9,39 @@ VALIDATION_INTERVAL = int(N_EPOCHS / 2)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 
+# Helpers
+def calculate_decay_penalty(audio_data):
+    envelope = audio_data.mean(dim=(1, 3))
+    current_batch_size = audio_data.shape[0]
+
+    # ideal env (exponetial decay)
+    ideal_envelope = torch.exp(-torch.linspace(0, 5, N_FRAMES)).to(audio_data.device)
+    ideal_envelope = ideal_envelope.unsqueeze(0).repeat(current_batch_size, 1) + 5
+
+    decay_penalty = F.mse_loss(envelope, ideal_envelope)
+    return decay_penalty
+
+
+def calculate_periodicity_penalty(audio_data):
+    current_batch_size = audio_data.shape[0]
+    reshaped_audio = audio_data.reshape(current_batch_size, -1, N_FRAMES)
+    autocorr = torch.tensor([]).to(audio_data.device)
+    for i in range(current_batch_size):
+        sample = reshaped_audio[i]
+        sample_autocorr = F.conv1d(
+            sample.unsqueeze(0),
+            sample.flip(-1).unsqueeze(0),
+            padding=sample.shape[-1] - 1,
+        )
+        autocorr = torch.cat((autocorr, sample_autocorr), dim=0)
+
+    autocorr = autocorr / autocorr.max(dim=2, keepdim=True)[0]
+    periodicity_penalty = autocorr[:, :, 50:].mean()
+
+    return periodicity_penalty
+
+
+# Training
 def train_epoch(
     generator,
     discriminator,
@@ -16,8 +50,10 @@ def train_epoch(
     optimizer_G,
     optimizer_D,
     device,
-    epoch,
 ):
+    decay_penalty_weight = 0.001
+    periodicity_penalty_weight = 0.001
+
     generator.train()
     discriminator.train()
     total_g_loss, total_d_loss = 0, 0
@@ -36,7 +72,17 @@ def train_epoch(
         optimizer_G.zero_grad()
         z = torch.randn(batch_size, LATENT_DIM, 1, 1).to(device)
         fake_audio_data = generator(z)
-        g_loss = criterion(discriminator(fake_audio_data), real_labels)
+        g_adv_loss = criterion(discriminator(fake_audio_data), real_labels)
+        decay_penalty = calculate_decay_penalty(fake_audio_data)
+        periodicity_penalty = calculate_periodicity_penalty(fake_audio_data)
+
+        # Combine losses
+        g_loss = (
+            g_adv_loss
+            + decay_penalty * decay_penalty_weight
+            + periodicity_penalty * periodicity_penalty_weight
+        )
+
         g_loss.backward()
         optimizer_G.step()
         total_g_loss += g_loss.item()
@@ -45,6 +91,7 @@ def train_epoch(
         optimizer_D.zero_grad()
         real_loss = criterion(discriminator(real_audio_data), real_labels)
         fake_loss = criterion(discriminator(fake_audio_data.detach()), fake_labels)
+
         d_loss = (real_loss + fake_loss) / 2
         d_loss.backward()
         optimizer_D.step()
@@ -98,7 +145,6 @@ def training_loop(
             optimizer_G,
             optimizer_D,
             device,
-            epoch,
         )
 
         print(
@@ -112,6 +158,14 @@ def training_loop(
             )
             print(
                 f"------ Val ------ G Loss: {val_g_loss:.6f}, D Loss: {val_d_loss:.6f}"
+            )
+
+            z = torch.randn(1, LATENT_DIM, 1, 1).to(device)
+            generated_audio = generator(z).squeeze()
+            generated_audio_np = generated_audio.cpu().detach().numpy()
+            graph_spectrogram(
+                scale_data_to_range(generated_audio_np, -120, 40),
+                f"Generated Audio epoch {epoch+1}",
             )
 
         # Save models periodically
