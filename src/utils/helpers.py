@@ -130,8 +130,29 @@ def graph_spectrogram(audio_data, sample_name):
         channel = audio_data[i]
         channel = channel.T
         spectrogram = channel
-        fig.add_trace(go.Heatmap(z=spectrogram, colorscale="Viridis"), row=i + 1, col=1)
+        fig.add_trace(
+            go.Heatmap(z=spectrogram, coloraxis="coloraxis1"),
+            row=i + 1,
+            col=1,
+        )
 
+    fig.update_xaxes(title_text="Frames", row=1, col=1)
+    fig.update_xaxes(title_text="Frames", row=2, col=1)
+    fig.update_yaxes(title_text="Frequency Bins", row=1, col=1)
+    fig.update_yaxes(title_text="Frequency Bins", row=2, col=1)
+
+    fig.update_layout(
+        coloraxis1=dict(
+            colorscale="Viridis",
+            colorbar=dict(
+                title="Loudness",
+                titleside="right",
+                ticksuffix="",
+                x=1.02,
+                dtick=0.2,
+            ),
+        )
+    )
     fig.update_layout(title_text=f"Stereo Audio Spectrograms For {sample_name}")
     fig.show()
 

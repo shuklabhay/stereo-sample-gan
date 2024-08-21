@@ -11,11 +11,13 @@ Continuation of UCLA COSMOS 2024 Research
 
 ## Introduction
 
-Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs. High quality audio generation models must be able to capture and replicate sophisticated temporal relationships and spectral characteristcs, in a consistent manner. Accounting for audio data's complexities requires advanced training techniques and/or a network architecture tailored towards audio, for example as seen implemented in similar work WaveGAN[2]. This work attempts to represent audio data as images and recognize the limitations of audio representation generation using a Deep Convolutional Generative Network that does not use advanced training techniques and specialized audio-specific network architectures.
+Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs. High quality audio generation models must be able to capture and replicate sophisticated temporal relationships and spectral characteristcs, in a consistent manner. Accounting for audio data's complexities requires advanced training techniques and/or a network architecture tailored towards audio, yet this work attempts to represent audio data as images and recognize the limitations of audio representation generation using a Deep Convolutional Generative Network that does not use advanced training techniques and specialized audio-specific network architectures.
 
 Considerations for sounds to generate were kick drums, snare drums, full drum loops, and synth impules. This work attempts to generate kick drums because they best met the criteria of containing some temporal patterns but also not being too complex of a sound and also being a quick impulse. Kick drums are simple sounds that have the potential to have some, but not an infinite amount of possible variance. Kick drums are also an integral part of digital audio production and the foundational element of almost every song and drumset. Due to their importance, finding a large quantity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment.
 
 This investigation primarily seeks to determine how feasible it can be to use purely a DCGAN Architecture to recognize and replicate the spatial patterns and temporal patterns of an image representation of a kick drum. We will also experiment with generating pure sine waves as a means of validation.
+
+An important item to note is that this network aims to treat spectrograms truly as images," wihtout editing or optimizing the model to be more specialized towards audio generation as established DCGAN audio generation models tend to do. The exception to this is SpecGAN, which is a very similar approach to what this paper takes, with key differences being that SpecGAN that uses a compound loss function accounting for inverse stft loss, spectral normalization, and a more shallow architecture[2].
 
 ## Data Processing
 
@@ -32,7 +34,7 @@ The goal of this model is to replicate the following characteristics of a kick d
 
 ### Feature Extraction/Encoding
 
-The training data used is a compilation of 7856 audio samples. Each sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a window of 512 and hop size of 128, returning a representation of audio as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins. This shape is partially determined by hardware contraints.
+The training data used is a compilation of 7856 audio samples. A simple DCGAN can not learn about the time-series component of audio, so this feature extraction process must to flatten the time-series component into a static form of data. This is achieved by representing audio in the time-frequency domain. Each sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a window of 512 and hop size of 128, returning a representation of audio as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins. This shape is partially determined by hardware contraints.
 
 While amplitude data is important, this data is by nature skewed towards lower frequencies which contain more intensity. To account for this, a few things are done. First, after extracting channel amplitudes, the tensor of data is scaled to be between 0 and 100. The data is then passed through a noise threshold where all values under 10e-10 are set to zero. This normalized, noise gated amplitude information is then converted into a logarithmic, decibal scale, which describes percieved loudness instead of intensity, displaying audio information in a more uniform way relative to the entire frequency spectrum. This data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
@@ -48,13 +50,24 @@ This work uses 80% of the dataset as training data and 20% as validation with al
 
 ## Results
 
-Despite varying epoch count, around epoch 3-4 generator loss reaches and subsequently flatlines at 0.6931 and discriminator loss either also flatlines or slowly reduces to be around the range of 0.4780-0.4785. Even while
+### Kick Drum Generation
+
+Despite varying epoch count, around epoch 3-4 generator loss reaches and subsequently flatlines at 0.6931 and discriminator loss either also flatlines or slowly reduces to be around the range of 0.4780-0.4785. Validation loss also consistently remains around the same amount or increases.
+
+When analyzing generated audio, the model appears to learning to create long horizontal lines spanning the entire sample. Each generated output also appears contain little to no differences between each other.
+![Output spectrogram](static/model-output.png)
+
+While natural/virtual images contain overarching patterns, audio data is usualy more periodic and
+
+[show learned kernels]
 
 audio waveforms very periodic, need to do something so it doesnt learn to just generate fake lines
 
-### Kick Drum Generation
-
 ### Sine Validation
+
+Another interesting note is how the model acts when given data of a pure sine wave to generate.
+
+talk abt sine validation, also how even halving data to only be middle freq still gives random lines at top end
 
 ## Discussion
 
