@@ -195,25 +195,6 @@ def scale_normalized_db_to_amplis(normalized_loudness):
     return channel_amplis  # Amplitudes
 
 
-def lws(amplitudes):
-    iterations = 50
-    lookback, lookahead = 1, 1
-    angles = np.exp(2j * np.pi * np.random.rand(*amplitudes.shape))
-
-    for _ in range(iterations):
-        S = amplitudes * angles
-        for i in range(N_FREQ_BINS):
-            start = max(0, i - lookback)
-            end = min(N_FREQ_BINS - 1, i + lookahead + 1)
-            for j in range(N_FRAMES):
-                weights = amplitudes[j, start : end + 1]
-                E = np.sum(S[j, start : end + 1] * weights)
-                angles[j, i] = E / np.abs(E)
-
-    complex_spec = amplitudes * angles
-    return complex_spec
-
-
 def istft_with_griffin_lim_reconstruction(amplitudes, preserve_signal_angles=False):
     iterations = 100
 
@@ -236,9 +217,8 @@ def istft_with_griffin_lim_reconstruction(amplitudes, preserve_signal_angles=Fal
 
 
 def istft_hybrid(amplitudes):
-    complex_spec = lws(amplitudes)
     return istft_with_griffin_lim_reconstruction(
-        complex_spec, preserve_signal_angles=True
+        amplitudes, preserve_signal_angles=True
     )
 
 
