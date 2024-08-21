@@ -1,4 +1,4 @@
-# Kick it Out: Shortcomings to Generating Audio Representations With a Deep Convolution Generative Network
+# Kick it Out: Limitations to Audio Representation Generation With a Deep Convolution Generative Network
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
@@ -11,7 +11,7 @@ Continuation of UCLA COSMOS 2024 Research
 
 ## Introduction
 
-Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs. High quality audio generation models must be able to capture and replicate sophisticated temporal relationships and spectral characteristcs, in a consistent manner. Accounting for these complexities requires countless modifications and optimizations, for example as seen implemented in WaveGAN[2], a project this work was inspired by. This work attempts to recognize the limitations of audio representation generation with a Deep Convolutional Generative Network known to work with image generation.
+Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs. High quality audio generation models must be able to capture and replicate sophisticated temporal relationships and spectral characteristcs, in a consistent manner. Accounting for audio data's complexities requires advanced training techniques and/or a network architecture tailored towards audio, for example as seen implemented in similar work WaveGAN[2]. This work attempts to represent audio data as images and recognize the limitations of audio representation generation using a Deep Convolutional Generative Network that does not use advanced training techniques and specialized audio-specific network architectures.
 
 Considerations for sounds to generate were kick drums, snare drums, full drum loops, and synth impules. This work attempts to generate kick drums because they best met the criteria of containing some temporal patterns but also not being too complex of a sound and also being a quick impulse. Kick drums are simple sounds that have the potential to have some, but not an infinite amount of possible variance. Kick drums are also an integral part of digital audio production and the foundational element of almost every song and drumset. Due to their importance, finding a large quantity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment.
 
@@ -32,21 +32,23 @@ The goal of this model is to replicate the following characteristics of a kick d
 
 ### Feature Extraction/Encoding
 
-The training data used is a compilation of 7856 audio samples split into batches of 8. Each sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a window of 512 and hop size of 128, returning a representation of audio as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins.
+The training data used is a compilation of 7856 audio samples. Each sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a window of 512 and hop size of 128, returning a representation of audio as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins. This shape is partially determined by hardware contraints.
 
 While amplitude data is important, this data is by nature skewed towards lower frequencies which contain more intensity. To account for this, a few things are done. First, after extracting channel amplitudes, the tensor of data is scaled to be between 0 and 100. The data is then passed through a noise threshold where all values under 10e-10 are set to zero. This normalized, noise gated amplitude information is then converted into a logarithmic, decibal scale, which describes percieved loudness instead of intensity, displaying audio information in a more uniform way relative to the entire frequency spectrum. This data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
 [show amp data vs loudness data spectrogram]
 
-Generated audio representaions are a tensor of the same shape with values between -1 and 1. This data is scaled to be between -120 and 40, then passed into an exponential function converting the data back to "amplitudes" and finally noise gated. This amplitude information is then passed into a griffin-lim phase reconstruction algorithm[3] and finally converted to an audio format.
+Generated audio representaions are a tensor of the same shape with values between -1 and 1. This data is scaled to be between -120 and 40, then passed into an exponential function converting the data back to "amplitudes" and finally noise gated. This amplitude information is then passed into a griffin-lim phase reconstruction algorithm[3] and finally converted to playable audio.
 
 ## Implementation
 
-The model itself is is a standard DCGAN model[1] with 9 Convolution Transpose layers in the Generator and 9 Convolution layers in the Discriminator. There are two variations between this work's implementation of a DCGAN and the standard DCGAN. First, this approach uses an upsampling layer at the end of the end of the generator to reshape the generated values from (512, 512) to (176, 257), frames of audio by frequency bins. Frames by frequency bins are also upscaled to (512, 512) at the begining of the Discriminator phase. The Discriminatoe phase also includes a Phase Shuffle Layer after every convolution, as used in WaveGAN[2], meant to shuffle the phase of outputs and prevent learning to create random periodic values.
+The model itself is is a standard DCGAN model[1] with two slight modifcations, upsampling and phase shuffling. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, batch normalization layer, and ReLU activation. After convolving, the Generator upsamples the output from a two channel 512 by 512 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 512 by 512 to then pass through 9 convolution blocks, each consisting of a convolution layer, batch normalization layer, leaky ReLU activation, and phase shuffle layer. The phase shuffle layer, as used in WaveGAN[2], prevents the model from creating periodic, "checkerboarded" artifacts. After convolution, the probability of the generated audio being real is determined using a sigmoid function.
 
-This model is trained
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 8. The loss function is Binary Cross Entropy with Logit Loss and both the generator and discriminator use the Adam optimizer with seperate learning rates. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and discriminator training is disabled every other epoch to prevent the discriminator from overpowering the generator. Label smoothing is also applied in the training process.
 
 ## Results
+
+Despite varying epoch count, around epoch 3-4 generator loss reaches and subsequently flatlines at 0.6931 and discriminator loss either also flatlines or slowly reduces to be around the range of 0.4780-0.4785. Even while
 
 audio waveforms very periodic, need to do something so it doesnt learn to just generate fake lines
 
@@ -65,6 +67,7 @@ audio waveforms very periodic, need to do something so it doesnt learn to just g
 ## Conclusion
 
 also talk abt how transformer based audio gen is happening, audio gen process being made
+find somewhere to be like oh wavegan uses direct audio and also
 
 ## References
 

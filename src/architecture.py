@@ -43,10 +43,7 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
         self.deconv_blocks = nn.Sequential(
-            nn.ConvTranspose2d(LATENT_DIM, 512, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(LATENT_DIM, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
@@ -83,9 +80,10 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         self.conv_blocks = nn.Sequential(
-            nn.Upsample(size=(512, 512), mode="bilinear", align_corners=False),
+            nn.Upsample(size=(256, 256), mode="bilinear", align_corners=False),
             nn.Conv2d(N_CHANNELS, 4, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
+            PhaseShuffleLayer(max_shift=2),
             nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
             nn.BatchNorm2d(8),
@@ -110,11 +108,7 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             nn.BatchNorm2d(256),
             PhaseShuffleLayer(max_shift=2),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.BatchNorm2d(512),
-            PhaseShuffleLayer(max_shift=2),
-            nn.Conv2d(512, 1, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(256, 1, kernel_size=4, stride=2, padding=1),
             nn.Sigmoid(),
         )
 
