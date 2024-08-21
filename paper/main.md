@@ -1,4 +1,6 @@
-# Kick it Out: Limitations to Audio Representation Generation With a Deep Convolution Generative Network
+# Kick it Out: Limitations to Two Channel Audio Generation With a Deep Convolution Generative Network
+
+#todo: after written, rewrite everything with like the better clearer idea of like bigger differences of what is happening here that's more novel and new result or whatever- like the two channell gen not happening whereas specgan 1 channel works or whatever like figure out better whast novel here and whatever THEN can send it out to whoever whaytever
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
@@ -17,15 +19,15 @@ Considerations for sounds to generate were kick drums, snare drums, full drum lo
 
 This investigation primarily seeks to determine how feasible it can be to use purely a DCGAN Architecture to recognize and replicate the spatial patterns and temporal patterns of an image representation of a kick drum. We will also experiment with generating pure sine waves as a means of validation.
 
-An important item to note is that this network aims to treat spectrograms truly as images," wihtout editing or optimizing the model to be more specialized towards audio generation as established DCGAN audio generation models tend to do. The exception to this is SpecGAN, which is a very similar approach to what this paper takes, with key differences being that SpecGAN that uses a compound loss function accounting for inverse stft loss, spectral normalization, and a more shallow architecture[2].
+An important distinction is that this network aims to treat spectrograms truly as images, without tailoring the model towards audio generation as established DCGAN audio generation models such as WaveGAN[2] do. SpecGAN[2] follows a more conventional DCGAN approach as this paper aims to do, but key differences between SpecGAN and this work are that this work uses basic convolutions, a deeper architecture, a simpler loss function not accounting for stft loss, and spectral normalization- producing a model closer to a "pure" DCGAN approach. This project also specifically aims to generate stero channel kick drum clips, instead of mono varied percussion and natural sounds as previous models have set out to do.
 
-## Data Processing
+## Data Manipulation
 
-### Data Collection
+### Collection
 
-Training data is first sourced from digital production “sample packs” compiled by various parties. These packs contain a variety of kick drum samples (analog, cinematic, beatbox, heavy, edm, etc), providing a wholstic selection of samples that for the most part include a set of "defining characteristics" of a kick drum.
+Training data is first sourced from digital production “sample packs” compiled by various parties. These packs contain a variety of kick drum samples (analog, cinematic, beatbox, heavy, edm, etc), providing a wholstic selection of samples that for the most part include a set of "defining characteristics" of a kick drum. The goal of this model is to replicate the following characteristics of a kick drum:
 
-The goal of this model is to replicate the following characteristics of a kick drum: [graphic of kick drum spectrogram]
+[graphic of kick drum spectrogram]
 
 - A specific length of an audio sample (500 ms)
 - An atonal transient “click” at the beginning of the generated audio incorporating most of the frequency spectrum
@@ -36,28 +38,28 @@ The goal of this model is to replicate the following characteristics of a kick d
 
 The training data used is a compilation of 7856 audio samples. A simple DCGAN can not learn about the time-series component of audio, so this feature extraction process must to flatten the time-series component into a static form of data. This is achieved by representing audio in the time-frequency domain. Each sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a window of 512 and hop size of 128, returning a representation of audio as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins. This shape is partially determined by hardware contraints.
 
-While amplitude data is important, this data is by nature skewed towards lower frequencies which contain more intensity. To account for this, a few things are done. First, after extracting channel amplitudes, the tensor of data is scaled to be between 0 and 100. The data is then passed through a noise threshold where all values under 10e-10 are set to zero. This normalized, noise gated amplitude information is then converted into a logarithmic, decibal scale, which describes percieved loudness instead of intensity, displaying audio information in a more uniform way relative to the entire frequency spectrum. This data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
+While amplitude data is important, this data is by nature skewed towards lower frequencies which contain more intensity. To mitigate the effect this has on training, a process of feature extraction occurs to eqalize the representation of frequencies in data. First, after extracting channel amplitudes, the tensor of data is scaled to be between 0 and 100. The data is then passed through a noise threshold where all values under 10e-10 are set to zero. This normalized, noise gated amplitude information is then converted into a logarithmic, decibal scale, which describes percieved loudness instead of intensity, displaying audio information in a more uniform way relative to the entire frequency spectrum. This data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
-[show amp data vs loudness data spectrogram]
+[show amp data and loudness spectrograms]
 
 Generated audio representaions are a tensor of the same shape with values between -1 and 1. This data is scaled to be between -120 and 40, then passed into an exponential function converting the data back to "amplitudes" and finally noise gated. This amplitude information is then passed into a griffin-lim phase reconstruction algorithm[3] and finally converted to playable audio.
 
 ## Implementation
 
-The model itself is is a standard DCGAN model[1] with two slight modifcations, upsampling and phase shuffling. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, batch normalization layer, and ReLU activation. After convolving, the Generator upsamples the output from a two channel 512 by 512 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 512 by 512 to then pass through 9 convolution blocks, each consisting of a convolution layer, batch normalization layer, leaky ReLU activation, and phase shuffle layer. The phase shuffle layer, as used in WaveGAN[2], prevents the model from creating periodic, "checkerboarded" artifacts. After convolution, the probability of the generated audio being real is determined using a sigmoid function.
+The model itself is is a standard DCGAN model[1] with two slight modifcations, upsampling and phase shuffling. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, batch normalization layer, and ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization, batch normalization layer, leaky ReLU activation, and phase shuffle layer. After convolution, the probability of an audio clip audio being real is returned using a sigmoid function.
 
-This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 8. The loss function is Binary Cross Entropy with Logit Loss and both the generator and discriminator use the Adam optimizer with seperate learning rates. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and discriminator training is disabled every other epoch to prevent the discriminator from overpowering the generator. Label smoothing is also applied in the training process.
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 8. The loss function is Binary Cross Entropy with Logit Loss and both the generator and discriminator use the Adam optimizer with seperate learning rates. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and label smoothing is also applied.
 
 ## Results
 
 ### Kick Drum Generation
 
-Despite varying epoch count, around epoch 3-4 generator loss reaches and subsequently flatlines at 0.6931 and discriminator loss either also flatlines or slowly reduces to be around the range of 0.4780-0.4785. Validation loss also consistently remains around the same amount or increases.
+In mostly every training loop, generator and discriminator loss always tends to flatline around epoch 3-5, followedby discriminator loss either also flatlining or marinally reducing. Validation loss also consistently remains around the same amount or increases.
 
-When analyzing generated audio, the model appears to learning to create long horizontal lines spanning the entire sample. Each generated output also appears contain little to no differences between each other.
+When analyzing generated audio, the model appears to learning to create long horizontal lines spanning the entire sample. Each generated output also appears contain little to no differences between each other. The model fails in learning both the spatial and temporal patterns that any kick drum contains.
 ![Output spectrogram](static/model-output.png)
 
-While natural/virtual images contain overarching patterns, audio data is usualy more periodic and
+While natural/virtual images contain overarching patterns, audio data is usualy more periodic, thus the generator is able to learn to generate random lines and the discriminator believes it to be kick drums.
 
 [show learned kernels]
 

@@ -42,14 +42,13 @@ def train_epoch(
         total_g_loss += g_loss.item()
 
         # Train discriminator
-        if (epoch + 1) % 2 == 0:
-            optimizer_D.zero_grad()
-            real_loss = criterion(discriminator(real_audio_data), real_labels)
-            fake_loss = criterion(discriminator(fake_audio_data.detach()), fake_labels)
-            d_loss = (real_loss + fake_loss) / 2
-            d_loss.backward()
-            optimizer_D.step()
-            total_d_loss += d_loss.item()
+        optimizer_D.zero_grad()
+        real_loss = criterion(discriminator(real_audio_data), real_labels)
+        fake_loss = criterion(discriminator(fake_audio_data.detach()), fake_labels)
+        d_loss = (real_loss + fake_loss) / 2
+        d_loss.backward()
+        optimizer_D.step()
+        total_d_loss += d_loss.item()
 
     return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
 
@@ -103,7 +102,7 @@ def training_loop(
         )
 
         print(
-            f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.4f}, D Loss: {train_d_loss:.4f}"
+            f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, D Loss: {train_d_loss:.6f}"
         )
 
         # Validate periodically
@@ -112,7 +111,7 @@ def training_loop(
                 generator, discriminator, val_loader, criterion, device
             )
             print(
-                f"------ Val ------ G Loss: {val_g_loss:.4f}, D Loss: {val_d_loss:.4f}"
+                f"------ Val ------ G Loss: {val_g_loss:.6f}, D Loss: {val_d_loss:.6f}"
             )
 
         # Save models periodically
