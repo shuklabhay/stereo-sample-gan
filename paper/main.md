@@ -6,17 +6,22 @@ Continuation of UCLA COSMOS 2024 Research
 
 ## Abstract
 
-Samples are an integral part of digital audio production and a foundational element of almost every song and drumset. Every composer, producer, and sound designer has countless samples prepared to use on command, from every types of percussion to synthesizer noises to effects and atmospheres. Having a large sample library means more chances for inspiration, but at the same time it creates a bigger problem. Sample selection.
-
-Moreso with drums, choosing the right sample is something that can make or break a song, yet this process is made harder and harder
+/ write this
 
 ## Introduction
 
-Even though kick drums are usually simple sounds, finding the correct kick drum sample is always a rough process in audio production. This project takes a generational approach to sample searching,
+[remove background about production??]
+Audio samples are an integral part of digital audio production. Every composer, producer, and sound designer has their own collection countless samples prepared to use on command, from every type of percussion to unique synthesizers and instruments to vast effects and atmospheres. Having a larger sample library means larger sources of inspiration, but at the same time it creates a larger problem, determing which samples are high quality and which are not.
 
-work attempts to generate kick drums because these drum by nature are by simple sounds with the potential to have some, but not an infinite amount of possible variance. Other considerations were snare drums, full drum loops, and synth one shots.
+Moreso with drums, choosing the right sample is something that can make or break a song, yet this process is made harder as the artist's sample collection grows. This project aims to try to mitigate this issue by way of generating drum impulses, specifically kick drums. Available audio generation models often modify the sophistication of data, reducing multi-channel signals into one and downsampling, leading to a loss of audio quality. This work attempts to create a Deep Convolutional Generative Network that can generate high quality, multi channel kick drum audio representations.
 
-Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs, as a model must capture and replicate sophisticated temporal relationships and spectral characteristcs. To make this task easier, audio generation models often reduce the sophistication of data, reducing multi-channel signals into one and downsampling, leading to a loss of audio quality. This work attempts to create a Deep Convolutional Generative Network that can generate high quality, multi channel kick drum audio representations.
+Established audio generation models commonly take advantage of time-series optimized architectures (transformers, recurrent architectures, and HMMs [cite for each type, audio gen model w/ architectures]), but using these architecutres aren't the only way to generate audio. Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1], and other work like SpecGAN[2] show that a simple DCGAN approach can be used to generate audio, even though this work doesn't fully represent the capabilities of a DCGAN, especially not for drum generation [make this sound better].
+
+Audio generation requires capturing and replicating sophisticated temporal relationships and spectral characteristcs, something convolution is really good at doing for images. This project proposes a more modern approach
+
+while this doesnt seek to geenrate audio indisginguisable from reality (likelty not possible with dcgan) it attemps to take a another leap using deep convolution to generate stereo signals without minimal quality sacrafices in training data.
+
+very limited published research on audio generation convulving approach, this aims to prove dcgan's power w/ audio generation
 
 ## Data Manipulation
 
@@ -35,12 +40,10 @@ Training data is first sourced from digital production “sample packs” compil
 
 The training data used is a compilation of 7856 audio samples. A simple DCGAN can not learn about the time-series component of audio, so this feature extraction process must to flatten the time-series component into a static form of data. This is achieved by representing audio in the time-frequency domain. Each sample is first converted into a raw audio array representation using a standard 44100 hz sampling rate and preserving the two channel characteristic of the data. Then the audio sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a [window type] window, window of 512 and hop size of 128, returning a representation of a kick drum as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins. The parameters for the Short-time Fourier Transform are partially determined by hardware contraints.
 
-[talk abt fft parameters specifically: the window sizew and also about using larger amts of frames then cutting down so information is more detailed but the useless stuff not there. talk abt also like doing the oppsotie for when geenrating back the audio file]
+[talk abt fft parameters specifically: the window size and also about using larger amts of frames then cutting down so information is more detailed but the useless stuff not there. talk abt also like doing the oppsotie for when geenrating back the audio file]
 
 While amplitude data (output of fourier transform) is important, this data is by nature skewed towards lower frequencies which contain more intensity. To remove this effect, a process of feature extraction occurs to equalize the representation of frequencies in data. The tensor of amplitude data is scaled to be between 0 and 100 and then passed through a noise threshold where all values under 10e-10 are set to zero. This normalized, noise gated amplitude information is then converted into a logarithmic, decibal scale, which displays audio information as loudness, a more uniform way relative to the entire frequency spectrum. This data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
-![Magnitude information of a Kick Drum](static/magnitude.png)
-![Loudness information of the same Kick Drum](static/loudness.png)
 Note that both examples graphs are the same audio information, just because the magnitude information returns the null color the same
 
 Generated audio representaions are a tensor of the same shape with values between -1 and 1. This data is scaled to be between -120 and 40, then passed into an exponential function converting the data back to "amplitudes" and finally noise gated. This amplitude information is then passed into a griffin-lim phase reconstruction algorithm[3] and finally converted to playable audio.
@@ -77,7 +80,7 @@ As a result, a discriminator could be fooled into believing random periodic nois
 
 audio waveforms very periodic, need to do something so it doesnt learn to just generate fake lines
 
-compare with wavegan??? lowkey too much work be like ohhhh limitations
+compare with specgan??? ig i kinda have to but lowkey too much work maybe be like ohhhh limitationss
 
 for it to work need to optimize for kind of data, cant just use image gen
 

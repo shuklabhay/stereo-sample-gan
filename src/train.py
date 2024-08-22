@@ -34,8 +34,6 @@ def train_epoch(
     criterion,
     optimizer_G,
     optimizer_D,
-    scheduler_G,
-    scheduler_D,
     device,
 ):
     decay_penalty_weight = 0.1
@@ -66,7 +64,6 @@ def train_epoch(
 
         g_loss.backward()
         optimizer_G.step()
-        scheduler_G.step()
         total_g_loss += g_loss.item()
 
         # Train discriminator
@@ -77,7 +74,6 @@ def train_epoch(
         d_loss = (real_loss + fake_loss) / 2
         d_loss.backward()
         optimizer_D.step()
-        scheduler_D.step()
         total_d_loss += d_loss.item()
 
     return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
@@ -117,8 +113,6 @@ def training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
-    scheduler_G,
-    scheduler_D,
     device,
 ):
     for epoch in range(N_EPOCHS):
@@ -129,8 +123,6 @@ def training_loop(
             criterion,
             optimizer_G,
             optimizer_D,
-            scheduler_G,
-            scheduler_D,
             device,
         )
 
@@ -157,4 +149,4 @@ def training_loop(
 
         # Save models periodically
         if (epoch + 1) % SAVE_INTERVAL == 0:
-            save_model(generator, "DCGAN_final_model")
+            save_model(generator, "DCGAN")

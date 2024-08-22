@@ -4,7 +4,7 @@ from utils.helpers import normalized_db_to_wav, get_device, graph_spectrogram
 
 # Initialize Generator
 device = get_device()
-model_path = "model/working ish.pth"
+model_path = "model/DCGAN.pth"
 generator = Generator()
 generator.load_state_dict(
     torch.load(model_path, map_location=torch.device(device), weights_only=False)
