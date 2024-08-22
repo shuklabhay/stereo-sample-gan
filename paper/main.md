@@ -10,31 +10,32 @@ Continuation of UCLA COSMOS 2024 Research
 
 ## Introduction
 
-[remove background about production??]
-Audio samples are an integral part of digital audio production. Every composer, producer, and sound designer has their own collection countless samples prepared to use on command, from every type of percussion to unique synthesizers and instruments to vast effects and atmospheres. Having a larger sample library means larger sources of inspiration, but at the same time it creates a larger problem, determing which samples are high quality and which are not.
+Audio generation is an incredibly complex and computationally expensive task, and as architectures develop to efficiently process audio data, current audio generation models tend to reduce the sophistication of data, simplifying multi-channel signals into monophonic audio and reducing audio quality. These simplifications make audio data easier to process but trade off audio quality. While this work does not seek to generate audio indisginguisable from reality, it presents a unqiue approach to generating stero audio wihtout optimizing for a time series architecture.
 
-Moreso with drums, choosing the right sample is something that can make or break a song, yet this process is made harder as the artist's sample collection grows. This project aims to try to mitigate this issue by way of generating drum impulses, specifically kick drums. Available audio generation models often modify the sophistication of data, reducing multi-channel signals into one and downsampling, leading to a loss of audio quality. This work attempts to create a Deep Convolutional Generative Network that can generate high quality, multi channel kick drum audio representations.
+Audio generation models commonly take advantage of time-series optimized architectures (transformers, recurrent architectures, and HMMs [cite for each type, audio gen model w/ architectures]), but this work instead opts to use a Deep Convolutional GAN (DCGAN) Architecture[1] and analyze how well its ability to capture and replicate image characteristcs can be applied to a an image representation of the sophisticated temporal and spectral relationships audio inherently contains. This work aims to discover the limitations of a DCGAN based stereo audio generation architecture.
 
-Established audio generation models commonly take advantage of time-series optimized architectures (transformers, recurrent architectures, and HMMs [cite for each type, audio gen model w/ architectures]), but using these architecutres aren't the only way to generate audio. Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1], and other work like SpecGAN[2] show that a simple DCGAN approach can be used to generate audio, even though this work doesn't fully represent the capabilities of a DCGAN, especially not for drum generation [make this sound better].
-
-Audio generation requires capturing and replicating sophisticated temporal relationships and spectral characteristcs, something convolution is really good at doing for images. This project proposes a more modern approach
-
-while this doesnt seek to geenrate audio indisginguisable from reality (likelty not possible with dcgan) it attemps to take a another leap using deep convolution to generate stereo signals without minimal quality sacrafices in training data.
-
-very limited published research on audio generation convulving approach, this aims to prove dcgan's power w/ audio generation
+As a standard example, this model will focuses on generating a category of audio in an attempt to tailor the model towards the one type of sound and wholicsticly learn it's charactertics. Kick drums were chosen because of their simplicity and constrained amount of variance (see defining characteristics section [make it like a number section code].) Alternate audio category considerations were snare drums, full drum loops, and insrtrument impulses, but kick drums were decided to be the most optimal for this initial experiment due to their simple and relatively consistent features.
 
 ## Data Manipulation
 
 ### Collection
 
-Training data is first sourced from digital production “sample packs” compiled by various parties. These packs contain a variety of kick drum samples (analog, cinematic, beatbox, heavy, edm, etc), providing a wholstic selection of samples that for the most part include a set of "defining characteristics" of a kick drum. The goal of this model is to replicate the following characteristics of a kick drum:
+<div style="display: flex; gap: 20px;">
+<div style="width: 50%;">
+Training data is primarily sourced from digital production “sample packs” compiled by various parties. These packs contain a variety of kick drum samples (analog, cinematic, beatbox, heavy, edm, etc), providing a holistic selection of samples that for the most part include a set of "defining characteristics" of a kick drum.
 
-[graphic of kick drum spectrogram]
+<br>
 
-- A specific length of an audio sample (500 ms)
-- An atonal transient “click” at the beginning of the generated audio incorporating most of the frequency spectrum
-- A sustained, decaying low "rumble" following the transient of the sample
-- An overall "decaying" nature
+The goal of this model is to replicate the following characteristics of a kick drum:
+
+1. A transient “click” at the beginning of the generated audio incorporating most of the frequency spectrum
+2. A sustained, decaying low frequency specific "rumble" following the transient of the sample
+3. An overall "decaying" nature with ample variability between decay times
+</div>
+<div style="width: 50%;">
+<img src="static/kick-drum-examples.png" width="425">
+</div>
+</div>
 
 ### Feature Extraction/Encoding
 

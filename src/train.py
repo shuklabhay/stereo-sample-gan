@@ -1,4 +1,5 @@
 import random
+import numpy as np
 import torch
 import torch.nn.functional as F
 from architecture import LATENT_DIM
@@ -17,28 +18,27 @@ SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 
 # Helpers
-def calculate_decay_penalty(audio_data, training_data, device):
-    # Load average, random spectrograms
-    batch = audio_data.shape[0]
+def calculate_decay_penalty(generated_audio, spectrogram_bank, device):
+    # Load average & random spectrogram batches
+    batch = generated_audio.shape[0]
     average_spectrogram = load_npy_data(average_spectrogram_path)
     average_spectrogram = torch.from_numpy(average_spectrogram).to(device)
     average_spectrogram_batch = average_spectrogram.repeat(batch, 1, 1, 1)
 
-    training_data_list = training_data.tolist()
-    random_training_samples = random.sample(training_data_list, batch)
-    random_training_batch = torch.stack(random_training_samples).to(device)
+    random_indices = torch.randint(0, len(spectrogram_bank), (batch,), device=device)
+    random_training_batch = spectrogram_bank[random_indices]
 
-    # Created weighted reference (random & avg sample similarity)
+    # Created weighted reference based on random sample & avg sample similarity
     similarity_to_average = 1 - F.cosine_similarity(
         random_training_batch.view(batch, -1), average_spectrogram_batch.view(batch, -1)
-    )  # further from avg = larger weight
+    )  # further from avg = larger weight for random
     weights = F.softmax(similarity_to_average, dim=0).view(batch, 1, 1, 1)
     weighted_reference = (
         weights * random_training_batch + (1 - weights) * average_spectrogram_batch
     )
 
     # Compare generated audio to reference
-    decay_penalty = F.mse_loss(audio_data, weighted_reference)
+    decay_penalty = F.mse_loss(generated_audio, weighted_reference)
 
     return decay_penalty
 
@@ -50,7 +50,7 @@ def calculate_diversity_penalty(generated_samples):
     pairwise_distances = torch.pdist(flattened)
     diversity_penalty = -torch.mean(pairwise_distances)
 
-    return diversity_penalty
+    return 0.1 * diversity_penalty
 
 
 # Training
@@ -61,7 +61,7 @@ def train_epoch(
     criterion,
     optimizer_G,
     optimizer_D,
-    audio_train_data,
+    training_audio_data,
     device,
 ):
     decay_penalty_weight = 0.1
@@ -87,15 +87,15 @@ def train_epoch(
         fake_audio_data = generator(z)
         g_adv_loss = criterion(discriminator(fake_audio_data), real_labels)
         decay_penalty = calculate_decay_penalty(
-            fake_audio_data, audio_train_data, device
+            fake_audio_data, training_audio_data, device
         )
-        diversity_penalty = calculate_diversity_penalty(fake_audio_data)
+        # diversity_penalty = calculate_diversity_penalty(fake_audio_data)
 
         # Combine losses
         g_loss = (
             g_adv_loss
             + decay_penalty * decay_penalty_weight
-            + diversity_penalty * diversity_penalty_weight
+            # + diversity_penalty * diversity_penalty_weight
         )
 
         g_loss.backward()
@@ -149,7 +149,7 @@ def training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
-    audio_train_data,
+    training_audio_data,
     device,
 ):
     for epoch in range(N_EPOCHS):
@@ -160,7 +160,7 @@ def training_loop(
             criterion,
             optimizer_G,
             optimizer_D,
-            audio_train_data,
+            training_audio_data,
             device,
         )
 

@@ -20,12 +20,12 @@ LR_G = 0.002
 LR_D = 0.001
 
 # Load data
-audio_train_data = load_npy_data(compiled_data_path)
-audio_train_data = torch.FloatTensor(audio_train_data)
-train_size = int(0.8 * len(audio_train_data))
-val_size = len(audio_train_data) - train_size
+spectrogram_bank = load_npy_data(compiled_data_path)
+spectrogram_bank = torch.FloatTensor(spectrogram_bank)
+train_size = int(0.8 * len(spectrogram_bank))
+val_size = len(spectrogram_bank) - train_size
 train_dataset, val_dataset = random_split(
-    TensorDataset(audio_train_data), [train_size, val_size]
+    TensorDataset(spectrogram_bank), [train_size, val_size]
 )
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -50,6 +50,6 @@ training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
-    audio_train_data,
+    spectrogram_bank,
     device,
 )
