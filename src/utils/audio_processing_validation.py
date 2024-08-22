@@ -1,4 +1,4 @@
-from utils.helpers import (
+from helpers import (
     normalized_db_to_wav,
     encode_sample,
     graph_spectrogram,

@@ -10,7 +10,7 @@ from utils.helpers import (
     scale_data_to_range,
 )
 
-
+# Constants
 N_EPOCHS = 10
 VALIDATION_INTERVAL = int(N_EPOCHS / 2)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
@@ -27,25 +27,6 @@ def calculate_decay_penalty(audio_data):
     return decay_penalty
 
 
-def calculate_periodicity_penalty(audio_data):
-    current_batch_size = audio_data.shape[0]
-    reshaped_audio = audio_data.reshape(current_batch_size, -1, N_FRAMES)
-    autocorr = torch.tensor([]).to(audio_data.device)
-    for i in range(current_batch_size):
-        sample = reshaped_audio[i]
-        sample_autocorr = F.conv1d(
-            sample.unsqueeze(0),
-            sample.flip(-1).unsqueeze(0),
-            padding=sample.shape[-1] - 1,
-        )
-        autocorr = torch.cat((autocorr, sample_autocorr), dim=0)
-
-    autocorr = autocorr / autocorr.max(dim=2, keepdim=True)[0]
-    periodicity_penalty = autocorr[:, :, 50:].mean()
-
-    return periodicity_penalty
-
-
 # Training
 def train_epoch(
     generator,
@@ -54,10 +35,11 @@ def train_epoch(
     criterion,
     optimizer_G,
     optimizer_D,
+    scheduler_G,
+    scheduler_D,
     device,
 ):
     decay_penalty_weight = 0.1
-    periodicity_penalty_weight = 0.1
 
     generator.train()
     discriminator.train()
@@ -79,17 +61,13 @@ def train_epoch(
         fake_audio_data = generator(z)
         g_adv_loss = criterion(discriminator(fake_audio_data), real_labels)
         decay_penalty = calculate_decay_penalty(fake_audio_data)
-        # periodicity_penalty = calculate_periodicity_penalty(fake_audio_data)
 
         # Combine losses
-        g_loss = (
-            g_adv_loss
-            + decay_penalty * decay_penalty_weight
-            # + periodicity_penalty * periodicity_penalty_weight # ignore for now
-        )
+        g_loss = g_adv_loss + decay_penalty * decay_penalty_weight
 
         g_loss.backward()
         optimizer_G.step()
+        scheduler_G.step()
         total_g_loss += g_loss.item()
 
         # Train discriminator
@@ -100,6 +78,7 @@ def train_epoch(
         d_loss = (real_loss + fake_loss) / 2
         d_loss.backward()
         optimizer_D.step()
+        scheduler_D.step()
         total_d_loss += d_loss.item()
 
     return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
@@ -139,6 +118,8 @@ def training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
+    scheduler_G,
+    scheduler_D,
     device,
 ):
     for epoch in range(N_EPOCHS):
@@ -149,6 +130,8 @@ def training_loop(
             criterion,
             optimizer_G,
             optimizer_D,
+            scheduler_G,
+            scheduler_D,
             device,
         )
 

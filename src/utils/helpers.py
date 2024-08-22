@@ -18,12 +18,12 @@ model_save_dir = "model"
 AUDIO_SAMPLE_LENGTH = 0.5  # 500 ms
 GLOBAL_SR = 44100
 N_CHANNELS = 2  # Left, right
-N_FRAMES = 176
+N_FRAMES = 352
 N_FREQ_BINS = 257
 
 # Initialize STFT Object
 GLOBAL_WIN = 2**9
-GLOBAL_HOP = 2**7
+GLOBAL_HOP = 2**6
 win = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=14)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
@@ -111,12 +111,36 @@ def normalize_sample_length(audio_file_path):
         y = y[:, : int(target_length * sr)]
     else:
         padding = int((target_length - actual_length) * sr)
-        y = np.pad(y, ((0, 0), (0, padding)), mode="constant")
+        y = np.pad(y, ((0, 0), (0, padding)), mode="linear_ramp")
 
     return y
 
 
-def noise_thresh(data, threshold=10e-10):
+def resize_spectrogram(channel_spectrogram):
+    # Remove topmost frequency bin, flatten frames to 256
+    channel_spectrogram = channel_spectrogram[:, :-1]
+    channel_spectrogram = channel_spectrogram[:256, :]
+
+    frames_to_fade = 50
+    fade_out_weights = np.linspace(1, 0, frames_to_fade)  # linear
+    channel_spectrogram[256 - frames_to_fade :, :] *= fade_out_weights[:, np.newaxis]
+
+    return channel_spectrogram
+
+
+def resize_generated_audio(channel_loudness):
+    # Add topmost frequency bin, add blank frames until N_FRAMES
+    new_freq_bin = np.zeros((channel_loudness.shape[0], 1))
+    channel_loudness = np.hstack((new_freq_bin, channel_loudness))
+
+    num_frames_to_add = N_FRAMES - channel_loudness.shape[0]
+    empty_frames = np.zeros((num_frames_to_add, channel_loudness.shape[1]))
+    channel_loudness = np.vstack((channel_loudness, empty_frames))
+
+    return channel_loudness
+
+
+def noise_thresh(data, threshold=10e-12):
     data[np.abs(data) < threshold] = 0
     return data
 
@@ -166,11 +190,13 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
 # Encoding audio
 def extract_sample_magnitudes(audio_data):
     sample_as_magnitudes = []
+
     for channel in audio_data:
         channel_mean = np.mean(channel)
         channel -= channel_mean
         stft = STFT.stft(channel)
         magnitudes = np.abs(stft).T
+        magnitudes = resize_spectrogram(magnitudes)
         sample_as_magnitudes.append(magnitudes)
 
     sample_as_magnitudes = np.array(sample_as_magnitudes)
@@ -251,8 +277,10 @@ def normalized_db_to_wav(loudness_data, name):
         channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
         audio_channel_loudness_info.append(channel_db_loudnes)
 
+        channel_loudness = resize_generated_audio(channel_loudness)
         channel_magnitudes = scale_normalized_db_to_magnitudes(channel_loudness)
         audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
+
         audio_reconstruction.append(audio_signal)
 
     graph_spectrogram(audio_channel_loudness_info, "Generated Audio Loudness (db)", 10)

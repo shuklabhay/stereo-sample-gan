@@ -1,6 +1,4 @@
-# Kick it Out: Two Channel Kick Drum Generation With a Deep Convolution Generative Architecture.
-
-use attention, use special loss calcs, if i get this working then BOOM make it about kick generation using super optimized deep conv
+# Kick it Out: Multi-Channel Kick Drum Generation With a Deep Convolution Generative Architecture.
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
@@ -31,11 +29,15 @@ Training data is first sourced from digital production “sample packs” compil
 
 ### Feature Extraction/Encoding
 
-The training data used is a compilation of 7856 audio samples. A simple DCGAN can not learn about the time-series component of audio, so this feature extraction process must to flatten the time-series component into a static form of data. This is achieved by representing audio in the time-frequency domain. Each sample is first converted into a raw audio array representation using a standard 44100 hz sampling rate and preserving the two channel characteristic of the data. Then the audio sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a window of 512 and hop size of 128, returning a representation of a kick drum as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins. The parameters for the Short-time Fourier Transform are partially determined by hardware contraints.
+The training data used is a compilation of 7856 audio samples. A simple DCGAN can not learn about the time-series component of audio, so this feature extraction process must to flatten the time-series component into a static form of data. This is achieved by representing audio in the time-frequency domain. Each sample is first converted into a raw audio array representation using a standard 44100 hz sampling rate and preserving the two channel characteristic of the data. Then the audio sample is normalized to a length of 500 miliseconds and passed into a Short-time Fourier Transform with a [window type] window, window of 512 and hop size of 128, returning a representation of a kick drum as an array of amplitudes for 2 channels, 176 frames of audio, 257 frequency bins. The parameters for the Short-time Fourier Transform are partially determined by hardware contraints.
+
+[talk abt fft parameters specifically: the window sizew and also about using larger amts of frames then cutting down so information is more detailed but the useless stuff not there. talk abt also like doing the oppsotie for when geenrating back the audio file]
 
 While amplitude data (output of fourier transform) is important, this data is by nature skewed towards lower frequencies which contain more intensity. To remove this effect, a process of feature extraction occurs to equalize the representation of frequencies in data. The tensor of amplitude data is scaled to be between 0 and 100 and then passed through a noise threshold where all values under 10e-10 are set to zero. This normalized, noise gated amplitude information is then converted into a logarithmic, decibal scale, which displays audio information as loudness, a more uniform way relative to the entire frequency spectrum. This data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
-[show amp data and loudness spectrograms]
+![Magnitude information of a Kick Drum](static/magnitude.png)
+![Loudness information of the same Kick Drum](static/loudness.png)
+Note that both examples graphs are the same audio information, just because the magnitude information returns the null color the same
 
 Generated audio representaions are a tensor of the same shape with values between -1 and 1. This data is scaled to be between -120 and 40, then passed into an exponential function converting the data back to "amplitudes" and finally noise gated. This amplitude information is then passed into a griffin-lim phase reconstruction algorithm[3] and finally converted to playable audio.
 
@@ -43,9 +45,9 @@ Generated audio representaions are a tensor of the same shape with values betwee
 
 The model itself is is a standard DCGAN model[1] with two slight modifcations, upsampling and spectral normalization. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation.
 
-This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. The Generator and Discriminator utilize Binary Cross Entropy with Logit loss functions to compute loss and Adam optimizers. Generator loss is also modified to encourage create a decaying sound [explain how] and penalize periodic noise patterns [explain how]. Due to hardware limitations, the model is trained over ten epochs. Validation occurs every 5 epochs and label smoothing is also applied to prevent overconfidence.
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. The Generator and Discriminator utilize Binary Cross Entropy with Logit loss functions to compute loss and Adam optimizers. Generator loss is also modified to encourage create a decaying sound [explain how]. Due to hardware limitations, the model is trained over ten epochs and Validation occurs every 5 epochs. Overconfidence is prevented using label smoothing.
 
-![Average Data Point](static/average-data-point.png)
+![Average Kick Drum](static/average-kick-drum.png)
 
 ## Results
 
@@ -55,8 +57,6 @@ In mostly every training loop, generator and discriminator loss always tends to 
 
 When analyzing generated audio, it is apparent that the model is creating some periodic noise pattern with some sort of sound in the middle of the frequency spectrum. Each generated output also appears contain little to no differences between each other.
 ![Output spectrogram](static/model-output.png)
-
-intuition/reasoning idea for why it doesnt work (maybe?)
 
 - decaying shape exists but details of shape vary, some samples decay longer some decay smapper
 - subtle complexities stop gan from perfect replication (one sample w/ super long decay makes it question all other short decay samples?? figure out if this is fr)
@@ -73,7 +73,7 @@ As a result, a discriminator could be fooled into believing random periodic nois
 
 audio waveforms very periodic, need to do something so it doesnt learn to just generate fake lines
 
-proposed model collapse fix only makes worse
+compare with wavegan??? lowkey too much work be like ohhhh limitations
 
 for it to work need to optimize for kind of data, cant just use image gen
 
@@ -87,7 +87,7 @@ talk abt sine validation, also how even halving data to only be middle freq stil
 
 ### Model Shortcomings
 
-### iSTFT Shortcomings
+### STFT and iSTFT Losses
 
 ### Contributions
 

@@ -18,6 +18,7 @@ from utils.helpers import (
 # Constants
 LR_G = 0.002
 LR_D = 0.001
+LR_DECAY = 0.97
 
 # Load data
 audio_data = load_npy_data(compiled_data_path)
@@ -36,6 +37,9 @@ discriminator = Discriminator()
 criterion = nn.BCEWithLogitsLoss()
 optimizer_G = optim.Adam(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  # type: ignore
 optimizer_D = optim.Adam(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
+scheduler_G = optim.lr_scheduler.ExponentialLR(optimizer_G, gamma=LR_DECAY)
+scheduler_D = optim.lr_scheduler.ExponentialLR(optimizer_D, gamma=LR_DECAY)
+
 
 device = get_device()
 generator.to(device)
@@ -50,5 +54,7 @@ training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
+    scheduler_G,
+    scheduler_D,
     device,
 )
