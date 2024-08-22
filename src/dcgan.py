@@ -18,7 +18,7 @@ from utils.helpers import (
 # Constants
 LR_G = 0.002
 LR_D = 0.001
-LR_DECAY = 0.97
+LR_DECAY = 1
 
 # Load data
 audio_data = load_npy_data(compiled_data_path)

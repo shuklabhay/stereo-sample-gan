@@ -2,7 +2,6 @@ import torch
 import torch.nn.functional as F
 from architecture import LATENT_DIM
 from utils.helpers import (
-    N_FRAMES,
     average_spectrogram_path,
     graph_spectrogram,
     load_npy_data,

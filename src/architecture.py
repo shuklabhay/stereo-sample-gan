@@ -16,7 +16,6 @@ SAVE_INTERVAL = int(N_EPOCHS / 1)
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
-
         self.deconv_blocks = nn.Sequential(
             nn.ConvTranspose2d(LATENT_DIM, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(256),
@@ -40,19 +39,22 @@ class Generator(nn.Module):
             nn.BatchNorm2d(4),
             nn.ReLU(inplace=True),
             nn.ConvTranspose2d(4, N_CHANNELS, kernel_size=4, stride=2, padding=1),
-        )  # Output: 2, 256, 256
-        self.tanh = nn.Tanh()
+            nn.Upsample(
+                size=(N_FRAMES, N_FREQ_BINS), mode="bilinear", align_corners=False
+            ),
+            nn.Tanh(),
+        )
 
     def forward(self, z):
         x = self.deconv_blocks(z)
-
-        return self.tanh(x)
+        return x
 
 
 class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
-        self.conv_blocks = nn.Sequential(  # input: 2, 256, 256
+        self.conv_blocks = nn.Sequential(
+            nn.Upsample(size=(256, 256), mode="bilinear", align_corners=False),
             spectral_norm(nn.Conv2d(N_CHANNELS, 4, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2, inplace=True),
             spectral_norm(nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1)),

@@ -6,13 +6,17 @@ Continuation of UCLA COSMOS 2024 Research
 
 ## Abstract
 
-\_\_\_GENERATE ALL IMAGES NEWLY BC NEW STUFF OR WTV JST LIKE ALL IMAGES USED DONT GO OFF OLD IMAGES JUST GEENRATE EVERYTHING MYSELF
+Samples are an integral part of digital audio production and a foundational element of almost every song and drumset. Every composer, producer, and sound designer has countless samples prepared to use on command, from every types of percussion to synthesizer noises to effects and atmospheres. Having a large sample library means more chances for inspiration, but at the same time it creates a bigger problem. Sample selection.
+
+Moreso with drums, choosing the right sample is something that can make or break a song, yet this process is made harder and harder
 
 ## Introduction
 
-Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGAN as a model must capture and replicate sophisticated temporal relationships and spectral characteristcs. To make this task easier, audio generation models often reduce the sophistication of data, reducing multi-channel signals into one and reducing sampling rates, laerning to a loss of audio quality. This work aims to generate high quality, multi channel kick drum audio representations while not straying too far away from a Deep Convolutional Generative Network Architecture.
+Even though kick drums are usually simple sounds, finding the correct kick drum sample is always a rough process in audio production. This project takes a generational approach to sample searching,
 
-Considerations for sounds to generate were kick drums, snare drums, full drum loops, and synth impules, but this work attempts to generate kick drums because they best met the criteria of containing some temporal patterns but also not being too complex of a sound and also being a quick impulse. Kick drums are simple sounds that have the potential to have some, but not an infinite amount of possible variance. Kick drums are also an integral part of digital audio production and the foundational element of almost every song and drumset. Due to their importance, finding a large quantity of high quality, unique kick drum samples is often a problem in the digital audio production enviroment.
+work attempts to generate kick drums because these drum by nature are by simple sounds with the potential to have some, but not an infinite amount of possible variance. Other considerations were snare drums, full drum loops, and synth one shots.
+
+Since their introduction, CNN based Generative Adversarial Networks (DCGANs) have vastly increased the capabilites of machine learning models, allowing high-fidelity synthetic image generation [1]. Despite these capabilities, audio generation is a more complicated problem for DCGANs, as a model must capture and replicate sophisticated temporal relationships and spectral characteristcs. To make this task easier, audio generation models often reduce the sophistication of data, reducing multi-channel signals into one and downsampling, leading to a loss of audio quality. This work attempts to create a Deep Convolutional Generative Network that can generate high quality, multi channel kick drum audio representations.
 
 ## Data Manipulation
 
