@@ -165,4 +165,5 @@ cython_debug/
 data/
 .vscode/
 .DS_Store
-DCGAN_generated_audio.wav
+generated_audio.wav
+test.wav

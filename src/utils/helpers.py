@@ -15,10 +15,10 @@ average_spectrogram_path = "data/average_spectrogram.npy"
 audio_output_dir = "model"
 model_save_dir = "model"
 
-AUDIO_SAMPLE_LENGTH = 0.5  # 500 ms
+AUDIO_SAMPLE_LENGTH = 0.7  # 700 ms
 GLOBAL_SR = 44100
 N_CHANNELS = 2  # Left, right
-N_FRAMES = 176
+N_FRAMES = 245
 N_FREQ_BINS = 257
 
 # Initialize STFT Object
@@ -116,13 +116,11 @@ def normalize_sample_length(audio_file_path):
     return y
 
 
-def noise_thresh(data):
-    threshold = 3  # std
+def loudness_thresh(data):
+    hearable_audio_thresh = -90
+    floor = -120
 
-    data_mean = np.mean(data)
-    data_std = np.std(data)
-    lower_bound = data_mean - threshold * data_std
-    data[(data < lower_bound)] = 0
+    data[data < hearable_audio_thresh] = floor
     return data
 
 
@@ -186,16 +184,15 @@ def extract_sample_magnitudes(audio_data):
 
 def scale_magnitude_to_normalized_loudness(channel_magnitudes):
     channel_magnitudes = scale_data_to_range(channel_magnitudes, 0, 100)
-
-    channel_magnitudes = noise_thresh(channel_magnitudes)
     channel_loudness = 20 * np.log10(np.abs(channel_magnitudes) + 1e-6)
+
+    channel_loudness = loudness_thresh(channel_loudness)
     normalized_loudness = scale_data_to_range(channel_loudness, -1, 1)
     return normalized_loudness
 
 
 def encode_sample(sample_path):
     normalized_y = normalize_sample_length(sample_path)
-
     magnitudes = extract_sample_magnitudes(normalized_y)
     loudness_data = scale_magnitude_to_normalized_loudness(magnitudes)
     return loudness_data
@@ -220,10 +217,11 @@ def encode_sample_directory(sample_dir, silent=True):
 
 
 # Decoding audio
-def scale_normalized_db_to_magnitudes(normalized_loudness):
-    unnormalized_loudness_data = scale_data_to_range(normalized_loudness, -120, 40)
-    channel_magnitudes = np.power(10, (unnormalized_loudness_data / 20))
-    channel_magnitudes = noise_thresh(channel_magnitudes)
+def scale_normalized_loudness_to_magnitudes(normalized_loudness):
+    loudness_data = scale_data_to_range(normalized_loudness, -120, 40)
+    loudness_data = loudness_thresh(loudness_data)
+
+    channel_magnitudes = np.power(10, (loudness_data / 20))
 
     return channel_magnitudes
 
@@ -257,7 +255,7 @@ def normalized_db_to_wav(loudness_data, name):
         channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
         audio_channel_loudness_info.append(channel_db_loudnes)
 
-        channel_magnitudes = scale_normalized_db_to_magnitudes(channel_loudness)
+        channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
         audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
 
         audio_reconstruction.append(audio_signal)

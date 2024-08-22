@@ -19,4 +19,4 @@ with torch.no_grad():
 
 generated_output = generated_output.squeeze().numpy()
 print("Generated output shape:", generated_output.shape)
-normalized_db_to_wav(generated_output, "DCGAN_generated_audio")
+normalized_db_to_wav(generated_output, "generated_audio")
