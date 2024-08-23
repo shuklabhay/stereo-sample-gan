@@ -12,7 +12,7 @@ Continuation of UCLA COSMOS 2024 Research
 
 Audio generation is an incredibly complex and computationally expensive task, and as architectures develop to efficiently process audio data, current audio generation models tend to reduce the sophistication of data, simplifying multi-channel signals into monophonic audio and reducing audio quality. These simplifications make audio data easier to process but trade off audio quality. While this work does not seek to generate audio indisginguisable from reality, it presents a unqiue approach to generating stero audio wihtout optimizing for a time series architecture.
 
-Audio generation models commonly take advantage of time-series optimized architectures (transformers, recurrent architectures, and HMMs [ADD CITATIONS FOR THIS- MAYBE JUST STH SAYING RECURRENT USED FOR AUDIO]), but this work instead opts to use a Deep Convolutional GAN (DCGAN) Architecture[1] and analyze how well its ability to capture and replicate multi channel image characteristcs can be applied to a multi channel image representation of the sophisticated temporal and spectral relationships audio inherently contains.
+Audio generation models commonly take advantage of time-series optimized architectures (transformers, recurrent architectures, and HMMs [ADD CITATIONS FOR THIS- MAYBE JUST STH SAYING RECURRENT USED FOR AUDIO]), but this work instead opts to use a Deep Convolutional GAN (DCGAN) Architecture[1] and analyze how well it can be used to capture and replicate multi channel image characteristcs can be applied to a multi channel image representation of the sophisticated temporal and spectral relationships audio inherently contains.
 
 As a standard example, this model will focuses on generating a category of audio in an attempt to tailor the model towards the one type of sound and wholicsticly learn it's charactertics. Kick drums were chosen because of their simplicity and constrained amount of variance (see defining characteristics section [make it like a number section code].) Alternate audio category considerations were snare drums, full drum loops, and insrtrument impulses, but kick drums were decided to be the most optimal for this initial experiment due to their simple and relatively consistent features.
 
@@ -24,10 +24,10 @@ The training data used is a compilation of 7856 kick drum impules. This data is 
 
 A kick drum's "defining" characteristics include:
 
-1. A transient “click” at the beginning of the generated audio incorporating most of the frequency spectrum
-2. A sustained, decaying low frequency specific "rumble" following the transient of the sample
+1. A transient: The “click” at the beginning of the generated audio incorporating most of the frequency spectrum
+2. A fundamental: The sustained, decaying low frequency "rumble" after the transient
 3. An overall "decaying" nature (spectral centroid shifts downwards)
-4. Ample variability between decay times
+4. Ample variability between decay times for each sample
 
 <img alt='Features of a Kick Drum' src="static/kick-drum-features.png" width="350">
 <p><b>Fig 1:</b> <i>Visualization of key features of a kick drum.</i></p>
@@ -47,7 +47,7 @@ Generated audio representations apply the same audio scaling in the opposite dir
 
 ### Architecture
 
-This model seeks to replicate a DCGAN's multi-channel image generation capabilities instead with a two channel audio representation. This work utilizes a standard DCGAN model[1] with two slight modifcations, upsampling and spectral normalization. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation.
+This model seeks to replicate a DCGAN's multi-channel image generation capabilities[1] to create varied two channel audio representations. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation.
 
 ### Training
 
@@ -65,6 +65,8 @@ ALSO ADD CITATIONS ON INTRO PARAGRAPH 2
 ### Model Evaluation
 
 what failed, what worked, do other papers have similar results?
+
+talk about generating specifically a kick drum vs learning the general shape of a kick drum/how to replicate a general shape rather than learning oh transiewnt then fundamental etc
 
 [show learned kernels as a part of this]
 

@@ -5,7 +5,7 @@ from torch.nn.utils import spectral_norm
 
 # Constants Constants
 BATCH_SIZE = 16
-LATENT_DIM = 100
+LATENT_DIM = 128
 N_EPOCHS = 10
 
 VALIDATION_INTERVAL = int(N_EPOCHS / 2)
@@ -16,10 +16,12 @@ SAVE_INTERVAL = int(N_EPOCHS / 1)
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
-        self.deconv_blocks = nn.Sequential(
-            nn.ConvTranspose2d(LATENT_DIM, 256, kernel_size=4, stride=2, padding=1),
+        self.latent_to_features = nn.Sequential(
+            nn.ConvTranspose2d(LATENT_DIM, 256, kernel_size=4, stride=1, padding=0),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
+        )
+        self.features_to_audio = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
@@ -44,10 +46,21 @@ class Generator(nn.Module):
             ),
             nn.Tanh(),
         )
+        self.decay_modulator = nn.Sequential(
+            nn.Linear(LATENT_DIM, 128),
+            nn.ReLU(),
+            nn.Linear(128, N_FRAMES),
+            nn.Sigmoid(),
+        )
 
     def forward(self, z):
-        x = self.deconv_blocks(z)
-        return x
+        features = self.latent_to_features(z)
+        audio = self.features_to_audio(features)
+        decay_profile = self.decay_modulator(z.view(z.size(0), -1)).view(
+            z.size(0), 1, 1, -1, 1
+        )
+        modulated_audio = audio * decay_profile
+        return modulated_audio
 
 
 class Discriminator(nn.Module):

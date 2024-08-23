@@ -10,7 +10,7 @@ from utils.helpers import (
 )
 
 # Constants
-N_EPOCHS = 10
+N_EPOCHS = 1
 VALIDATION_INTERVAL = int(N_EPOCHS / 2)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
@@ -27,9 +27,10 @@ def calculate_feat_match_penalty(real_features, fake_features):
 def calculate_spectral_centroid_shift_penalty(
     generated_audio, training_audio_data, device
 ):
-    transient_frames = 5
-    decay_frames = 20
     batch_size, channels, frames, freq_bins = generated_audio.shape
+    transient_frames = 5
+    decay_frames = 150
+    release_frames = frames - decay_frames - transient_frames
 
     # Calculate spectral centroid
     freq_range = torch.arange(freq_bins, device=device).unsqueeze(0).unsqueeze(0)
@@ -45,43 +46,40 @@ def calculate_spectral_centroid_shift_penalty(
     transient_penalty = F.relu(transient_centroid_shift)
 
     # Decay section: shift downwards
-    decay_centroid_shift = torch.mean(
-        spectral_centroid[:, transient_frames : transient_frames + decay_frames]
-        - spectral_centroid[
-            :, transient_frames - 1 : transient_frames + decay_frames - 1
-        ]
-    )
-    decay_penalty = F.relu(decay_centroid_shift / 5)
+    decay_centroid = spectral_centroid[
+        :, transient_frames : transient_frames + decay_frames
+    ]
+    decay_trend = torch.mean(decay_centroid[:, 1:] - decay_centroid[:, :-1], dim=1)
+    print(decay_trend)
+    decay_penalty = F.relu(decay_trend)
+
+    # Encourage diversity in decay rates
+    decay_rates = torch.diff(decay_centroid, dim=1)
+    decay_rate_variance = torch.var(decay_rates, dim=1)
+    decay_diversity_bonus = -torch.mean(decay_rate_variance)
 
     # Release section: shift downwards
     release_centroid_shift = torch.mean(
-        spectral_centroid[:, transient_frames + decay_frames + 1 :]
-        - spectral_centroid[:, transient_frames + decay_frames : -1]
+        spectral_centroid[:, -release_frames:]
+        - spectral_centroid[:, -release_frames - 1 : -1]
     )
     release_penalty = F.relu(release_centroid_shift)
 
-    # Calculate energy loss penalty based on random training data
-    random_indices = torch.randint(
-        0, len(training_audio_data), (batch_size,), device=device
-    )
-    sampled_audio = training_audio_data[random_indices]
-    sampled_energy_diff = torch.sqrt(
-        torch.diff(torch.sum(sampled_audio**2, dim=(1, 3)), dim=1)
-    )
-    generated_energy_diff = torch.sqrt(
-        torch.diff(torch.sum(generated_audio**2, dim=(1, 3)), dim=1)
-    )
-    energy_decay_penalty = F.mse_loss(generated_energy_diff, sampled_energy_diff)
-
-    # Calculate total loss
-    spectral_centroid_penalty = (
-        1 * transient_penalty
-        + 1 * decay_penalty
-        + 1 * release_penalty
-        + 0.9 * energy_decay_penalty
+    # Calculate total penalty
+    total_penalty = (
+        transient_penalty
+        + decay_penalty
+        + 0.5 * decay_diversity_bonus
+        + release_penalty
     )
 
-    return spectral_centroid_penalty
+    print(
+        f"Transient: {transient_penalty.item():.4f}, Decay: {decay_penalty.item():.4f}, "
+        f"Decay Diversity: {decay_diversity_bonus.item():.4f}, Release: {release_penalty.item():.4f}, "
+        f"Total: {total_penalty.item():.4f}"
+    )
+
+    return total_penalty
 
 
 def calculate_diversity_penalty(generated_audio, training_audio_data, device):
@@ -139,14 +137,12 @@ def train_epoch(
         # fake_features = discriminator.get_features(fake_audio_data)
         # feat_match_penalty = 0.1 * calculate_feat_match_penalty(real_features, fake_features)
 
-        centroid_shift_penalty = 0.4 * calculate_spectral_centroid_shift_penalty(
+        centroid_shift_penalty = 0.3 * calculate_spectral_centroid_shift_penalty(
             fake_audio_data, training_audio_data, device
         )
-        diversity_penalty = 0.1 * calculate_diversity_penalty(
+        diversity_penalty = 0.4 * calculate_diversity_penalty(
             fake_audio_data, training_audio_data, device
-        )
-
-        print(centroid_shift_penalty, diversity_penalty)
+        )  # samples in a batch unique
 
         g_loss = (
             g_adv_loss
