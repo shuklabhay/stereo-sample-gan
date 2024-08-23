@@ -20,25 +20,17 @@ As a standard example, this model will focuses on generating a category of audio
 
 ### Collection
 
-<div style="display: flex; gap: 20px;">
-<div style="flex-shrink: 1;">
 The training data used is a compilation of 7856 kick drum impules. This data is primarily sourced from digital production “sample packs” which contain various kick drum samples with many different characters and use cases (analog, electronic, pop, hip-hop, beatbox, heavy, punchy, etc), overall providing a diverse range of potential drum sounds to generate that for the most part include the following set of "defining" kick drum characteristics, features we will later try to reproduce where training data variety will be beneficial.
-
-<br>
 
 A kick drum's "defining" characteristics include:
 
 1. A transient “click” at the beginning of the generated audio incorporating most of the frequency spectrum
 2. A sustained, decaying low frequency specific "rumble" following the transient of the sample
-3. An overall "decaying" nature
+3. An overall "decaying" nature (spectral centroid shifts downwards)
 4. Ample variability between decay times
-</div>
 
-<div style="flex-shrink: 0;">
 <img alt='Features of a Kick Drum' src="static/kick-drum-features.png" width="325">
 <p><b>Fig 1:</b> <i>Visualization of key features of a kick drum.</i></p>
-</div>
-</div>
 
 ### Feature Extraction/Encoding
 
