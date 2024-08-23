@@ -2,16 +2,14 @@ import torch
 import torch.nn.functional as F
 from architecture import LATENT_DIM
 from utils.helpers import (
-    average_spectrogram_path,
     graph_spectrogram,
-    load_npy_data,
     save_model,
     scale_data_to_range,
 )
 
 # Constants
 N_EPOCHS = 1
-VALIDATION_INTERVAL = int(N_EPOCHS / 2)
+VALIDATION_INTERVAL = 1
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 
@@ -50,8 +48,7 @@ def calculate_spectral_centroid_shift_penalty(
         :, transient_frames : transient_frames + decay_frames
     ]
     decay_trend = torch.mean(decay_centroid[:, 1:] - decay_centroid[:, :-1], dim=1)
-    print(decay_trend)
-    decay_penalty = F.relu(decay_trend)
+    decay_penalty = F.relu(torch.mean(decay_trend))
 
     # Encourage diversity in decay rates
     decay_rates = torch.diff(decay_centroid, dim=1)
@@ -69,15 +66,15 @@ def calculate_spectral_centroid_shift_penalty(
     total_penalty = (
         transient_penalty
         + decay_penalty
-        + 0.5 * decay_diversity_bonus
+        # + 0.0005 * decay_diversity_bonus
         + release_penalty
     )
 
-    print(
-        f"Transient: {transient_penalty.item():.4f}, Decay: {decay_penalty.item():.4f}, "
-        f"Decay Diversity: {decay_diversity_bonus.item():.4f}, Release: {release_penalty.item():.4f}, "
-        f"Total: {total_penalty.item():.4f}"
-    )
+    # print(
+    #     f"Transient Loss: {transient_penalty.item():.4f}, Decay Loss: {decay_penalty.item():.4f}, "
+    #     f"Decay Div Loss: {decay_diversity_bonus.item():.4f}, Release Loss: {release_penalty.item():.4f}, "
+    #     f"Total Loss: {total_penalty.item():.4f}"
+    # )
 
     return total_penalty
 
@@ -133,9 +130,11 @@ def train_epoch(
         # Loss calculations
         g_adv_loss = criterion(discriminator(fake_audio_data), real_labels)
 
-        # real_features = discriminator.get_features(real_audio_data)
-        # fake_features = discriminator.get_features(fake_audio_data)
-        # feat_match_penalty = 0.1 * calculate_feat_match_penalty(real_features, fake_features)
+        real_features = discriminator.get_features(real_audio_data)
+        fake_features = discriminator.get_features(fake_audio_data)
+        feat_match_penalty = 0.5 * calculate_feat_match_penalty(
+            real_features, fake_features
+        )
 
         centroid_shift_penalty = 0.3 * calculate_spectral_centroid_shift_penalty(
             fake_audio_data, training_audio_data, device
@@ -144,11 +143,14 @@ def train_epoch(
             fake_audio_data, training_audio_data, device
         )  # samples in a batch unique
 
+        # MAKE FEAT MATCH PENALTY WORK WITH ONLY REAL SMAPLES NOT WHATEVER DISCRIM TRAINING ON
+
         g_loss = (
+            # force vertical
             g_adv_loss
             # + feat_match_penalty
-            + centroid_shift_penalty
-            + diversity_penalty
+            # + centroid_shift_penalty
+            # + diversity_penalty
         )
 
         g_loss.backward()
