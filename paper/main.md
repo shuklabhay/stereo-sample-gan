@@ -45,14 +45,17 @@ Generated audio representations apply the same audio scaling in the opposite dir
 
 ## Implementation
 
+### Architecture
+
 This model seeks to replicate a DCGAN's multi-channel image generation capabilities instead with a two channel audio representation. This work utilizes a standard DCGAN model[1] with two slight modifcations, upsampling and spectral normalization. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation.
 
-This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. The Generator and Discriminator utilize Binary Cross Entropy with Logit loss functions to compute loss and Adam optimizers. Generator loss is also modified to encourage create a decaying sound. Finally, overconfidence is prevented using label smoothing. The model is trained over ten epochs and Validation occurs every 5 epochs.
+### Training
+
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. The Generator and Discriminator both utilize the Binary Cross Entropy with Logit loss function to compute loss and an Adam optimizer [learning rates]. [talk about loss optimization stuff once it works]
+
+Finally, overconfidence is prevented using label smoothing. The model is trained over ten epochs and Validation occurs every 5 epochs
 
 EXPLAIN LOSS DECAY OPTIMIZING STUFF IN MORE DETAIL ONCE IT WORKS WITH VARIATION
-
-![Average Kick Drum](static/average-kick-drum.png)
-add caption
 
 ADD RESULTS&DISCUSSION WHEN MODEL WORKS BETTER
 ALSO ADD CITATIONS ON INTRO PARAGRAPH 2

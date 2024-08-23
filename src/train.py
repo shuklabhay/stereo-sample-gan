@@ -24,40 +24,27 @@ def calculate_feat_match_penalty(real_features, fake_features):
     return loss
 
 
-def calculate_decay_penalty(generated_audio, device):
-    # Encourage decay towards low frequencies
-    batch_size, channels, frames, freq_bins = generated_audio.shape
-
-    freq_weights = torch.linspace(1, 0, freq_bins, device=device)
-    freq_weights = freq_weights.unsqueeze(0).unsqueeze(0).unsqueeze(0)
-
-    weighted_energy_over_time = torch.sum(generated_audio**2 * freq_weights, dim=(1, 3))
-    energy_diff = weighted_energy_over_time[:, 1:] - weighted_energy_over_time[:, :-1]
-
-    decay_penalty = torch.mean(F.relu(energy_diff))
-
-    return decay_penalty
-
-
-def calculate_centroid_shift_penalty(generated_audio, device):
+def calculate_spectral_centroid_shift_penalty(
+    generated_audio, training_audio_data, device
+):
     transient_frames = 5
     decay_frames = 20
     batch_size, channels, frames, freq_bins = generated_audio.shape
 
-    # Calculate the spectral centroid
+    # Calculate spectral centroid
     freq_range = torch.arange(freq_bins, device=device).unsqueeze(0).unsqueeze(0)
     spectral_centroid = torch.sum(
         torch.abs(generated_audio) * freq_range, dim=(1, 3)
     ) / (torch.sum(torch.abs(generated_audio), dim=(1, 3)) + 1e-8)
 
-    # Transient section: downward shift
+    # Transient section: shift downwards
     transient_centroid_shift = torch.mean(
         spectral_centroid[:, 1:transient_frames]
         - spectral_centroid[:, : transient_frames - 1]
     )
     transient_penalty = F.relu(transient_centroid_shift)
 
-    # Decay section: downward shift
+    # Decay section: shift downwards
     decay_centroid_shift = torch.mean(
         spectral_centroid[:, transient_frames : transient_frames + decay_frames]
         - spectral_centroid[
@@ -66,17 +53,35 @@ def calculate_centroid_shift_penalty(generated_audio, device):
     )
     decay_penalty = F.relu(decay_centroid_shift / 5)
 
-    # Release section: downward shift
+    # Release section: shift downwards
     release_centroid_shift = torch.mean(
         spectral_centroid[:, transient_frames + decay_frames + 1 :]
         - spectral_centroid[:, transient_frames + decay_frames : -1]
     )
     release_penalty = F.relu(release_centroid_shift)
 
-    # Total penalty
-    centroid_shift_penalty = transient_penalty + decay_penalty + release_penalty
+    # Calculate energy loss penalty based on random training data
+    random_indices = torch.randint(
+        0, len(training_audio_data), (batch_size,), device=device
+    )
+    sampled_audio = training_audio_data[random_indices]
+    sampled_energy_diff = torch.sqrt(
+        torch.diff(torch.sum(sampled_audio**2, dim=(1, 3)), dim=1)
+    )
+    generated_energy_diff = torch.sqrt(
+        torch.diff(torch.sum(generated_audio**2, dim=(1, 3)), dim=1)
+    )
+    energy_decay_penalty = F.mse_loss(generated_energy_diff, sampled_energy_diff)
 
-    return centroid_shift_penalty
+    # Calculate total loss
+    spectral_centroid_penalty = (
+        1 * transient_penalty
+        + 1 * decay_penalty
+        + 1 * release_penalty
+        + 0.9 * energy_decay_penalty
+    )
+
+    return spectral_centroid_penalty
 
 
 def calculate_diversity_penalty(generated_audio, training_audio_data, device):
@@ -134,21 +139,19 @@ def train_epoch(
         # fake_features = discriminator.get_features(fake_audio_data)
         # feat_match_penalty = 0.1 * calculate_feat_match_penalty(real_features, fake_features)
 
-        decay_penalty = 0.1 * calculate_decay_penalty(fake_audio_data, device)
-        centroid_shift_penalty = 0.4 * calculate_centroid_shift_penalty(
-            fake_audio_data, device
+        centroid_shift_penalty = 0.4 * calculate_spectral_centroid_shift_penalty(
+            fake_audio_data, training_audio_data, device
         )
-        kick_character_penalty = decay_penalty + centroid_shift_penalty
-
         diversity_penalty = 0.1 * calculate_diversity_penalty(
             fake_audio_data, training_audio_data, device
         )
 
-        # Combine losses
+        print(centroid_shift_penalty, diversity_penalty)
+
         g_loss = (
             g_adv_loss
             # + feat_match_penalty
-            + kick_character_penalty
+            + centroid_shift_penalty
             + diversity_penalty
         )
 
