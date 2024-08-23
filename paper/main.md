@@ -4,8 +4,6 @@ Abhay Shukla\
 abhayshuklavtr@gmail.com\
 Continuation of UCLA COSMOS 2024 Research
 
-ADD CAPTIONS AND IMAGES ADN STUFF. ALSO CLEANUP ALL THW WRITING ADD WHAT STUFF IS MISSING AND STUFF FOR AT LEAST BASIC DRAFT
-
 ## Abstract
 
 / write this
@@ -23,47 +21,51 @@ As a standard example, this model will focuses on generating a category of audio
 ### Collection
 
 <div style="display: flex; gap: 20px;">
-<div style="width: 50%;">
-Training data is primarily sourced from digital production “sample packs” compiled by various parties. These packs contain a variety of kick drum samples (analog, cinematic, beatbox, heavy, edm, etc), providing a holistic selection of samples that for the most part include a set of "defining characteristics" of a kick drum.
+<div style="flex-shrink: 1;">
+The training data used is a compilation of 7856 kick drum impules. This data is primarily sourced from digital production “sample packs” which contain various kick drum samples with many different characters and use cases (analog, electronic, pop, hip-hop, beatbox, heavy, punchy, etc), overall providing a diverse range of potential drum sounds to generate that for the most part include the following set of "defining" kick drum characteristics, features we will later try to reproduce where training data variety will be beneficial.
 
 <br>
 
-The goal of this model is to replicate the following characteristics of a kick drum:
+A kick drum's "defining" characteristics include:
 
 1. A transient “click” at the beginning of the generated audio incorporating most of the frequency spectrum
 2. A sustained, decaying low frequency specific "rumble" following the transient of the sample
 3. An overall "decaying" nature
 4. Ample variability between decay times
 </div>
-<div style="width: 50%;">
-<img src="static/kick-drum-features.png" width="425">
-add a caption
+
+<div style="flex-shrink: 0;">
+<img alt='Features of a Kick Drum' src="static/kick-drum-features.png" width="325">
+<p><b>Fig 1:</b> <i>Visualization of key features of a kick drum.</i></p>
 </div>
 </div>
 
 ### Feature Extraction/Encoding
 
-The training data used is a compilation of 7856 audio samples. A simple DCGAN can not learn about the time-series component of audio, so this feature extraction process must to flatten the time-series component into a static form of data. This is achieved by representing audio in the time-frequency domain. Each sample is first converted into a two channel array using a standard 44100 hz sampling rate. Then the audio sample is normalized to a length of 700 miliseconds and passed into a Short-time Fourier Transform (STFT). The STFT uses a kaiser window with a beta value of 14, a window size of of 512, and a hope size of 128. These paramaters were determined to be the most effective through a signal reconstruction test (see STFT and iSTFT validation) and also limited by hardware contraints. The audio's final shape at this point is 2 channels by 245 frames by 257 frequency bins.
+A simple DCGAN can not learn about the time-series component of audio, so this feature extraction process must to flatten the time-series component into a static form of data. This is achieved by representing audio in the time-frequency domain. Each sample is first converted into a two channel array using a standard 44100 hz sampling rate. Then the audio sample is normalized to a length of 700 miliseconds and passed into a Short-time Fourier Transform (STFT). The STFT uses a kaiser window with a beta value of 14, a window size of of 512, and a hope size of 128. These parameters were determined to be the most effective through a signal reconstruction test (see STFT and iSTFT validation) and also limited by hardware contraints. The audio's final shape is 2 channels by 245 frames by 257 frequency bins.
 
 While amplitude data (the output of the STFT) is important, this data is by nature skewed towards lower frequencies which contain higher intensities. To equalize the representation of frequencies in data the tensor of amplitude data is normalized to be in the range of 0 to 100 and then scaled into the logarithmic, decibal scale, which represents audio information as loudness, a more uniform scale relative to the entire frequency spectrum. The 0-100 scaling is to ensure consistent loudness information. A loudness threshold then sets all signals less than -90 decibals (auditory cutoff for the human ear) to be the minimum decibal value (a constant of -120) this data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
-[show before and after loudness comparison img]
-add caption, include note that both examples graphs are the same audio information, just because the magnitude information returns the null color the same
+<div style="flex-shrink: 0;">
+<img alt= 'Data processing comparison' src="static/magnitudes_vs_loudness.png" width=1000>
+<p><b>Fig 2:</b> <i>STFT audio information before and after feature extraction.</i></p>
+</div>
 
-Generated audio representaions follow the inverse of the aforementioned scaling process and utilize the griffin-lim phase reconstruction algorithm[3] when applying the inverse STFT. This entire process preserves most, but not all audio information- a potential pitfall of this method (see .)
+Generated audio representations apply the same audio scaling in the opposite direction. The audio is also reconstreucted utilizing a inverse STFT in conjunction with the griffin-lim phase reconstruction algorithm[3]. This entire process preserves most, but not all audio information- a potential pitfall of this method (see STFT and iSTFT Validation)
 
 ## Implementation
 
 This model seeks to replicate a DCGAN's multi-channel image generation capabilities instead with a two channel audio representation. This work utilizes a standard DCGAN model[1] with two slight modifcations, upsampling and spectral normalization. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation.
 
-This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. The Generator and Discriminator utilize Binary Cross Entropy with Logit loss functions to compute loss and Adam optimizers. Generator loss is also modified to encourage create a decaying sound [explain how].
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. The Generator and Discriminator utilize Binary Cross Entropy with Logit loss functions to compute loss and Adam optimizers. Generator loss is also modified to encourage create a decaying sound. Finally, overconfidence is prevented using label smoothing. The model is trained over ten epochs and Validation occurs every 5 epochs.
 
-Overconfidence is also prevented using label smoothing.
-
-The model is trained over ten epochs and Validation occurs every 5 epochs.
+EXPLAIN LOSS DECAY OPTIMIZING STUFF IN MORE DETAIL ONCE IT WORKS WITH VARIATION
 
 ![Average Kick Drum](static/average-kick-drum.png)
 add caption
+
+ADD RESULTS&DISCUSSION WHEN MODEL WORKS BETTER
+ALSO ADD CITATIONS ON INTRO PARAGRAPH 2
 
 ## Results and Discussion
 

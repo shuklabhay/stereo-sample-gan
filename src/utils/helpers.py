@@ -162,7 +162,7 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
             ),
         )
     )
-    fig.update_layout(title_text=f"Stereo Audio Spectrograms For {sample_name}")
+    fig.update_layout(title_text=f"{sample_name}")
     fig.show()
 
 
