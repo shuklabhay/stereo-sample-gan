@@ -1,5 +1,3 @@
-import random
-import numpy as np
 import torch
 import torch.nn.functional as F
 from architecture import LATENT_DIM
@@ -18,7 +16,9 @@ SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 
 # Helpers
-def calculate_decay_penalty(generated_audio, spectrogram_bank, device):
+def calculate_weighted_spectrogram_decay_penalty(
+    generated_audio, spectrogram_bank, device
+):
     # Load average & random spectrogram batches
     batch = generated_audio.shape[0]
     average_spectrogram = load_npy_data(average_spectrogram_path)
@@ -39,18 +39,70 @@ def calculate_decay_penalty(generated_audio, spectrogram_bank, device):
 
     # Compare generated audio to reference
     decay_penalty = F.mse_loss(generated_audio, weighted_reference)
-
     return decay_penalty
 
 
+def calculate_energy_decay_penalty(generated_audio):
+    energy_over_time = torch.sum(generated_audio**2, dim=(1, 3))
+
+    energy_diff = energy_over_time[:, 1:] - energy_over_time[:, :-1]
+    decay_penalty = torch.mean(F.relu(energy_diff))
+    return decay_penalty
+
+
+def calculate_feat_match_penalty(real_features, fake_features):
+    loss = 0
+    for r_feat, f_feat in zip(real_features, fake_features):
+        loss += F.mse_loss(r_feat.mean(0), f_feat.mean(0))
+
+    return loss
+
+
+def calculate_kick_character_penalty(generated_audio, device):
+    batch_size, channels, time_steps, freq_bins = generated_audio.shape
+    energy_over_time = torch.sum(generated_audio**2, dim=(1, 3))
+
+    # encourage transient
+    transient_penalty = -torch.mean(energy_over_time[:, :10])
+
+    # encourage decay
+    energy_diff = energy_over_time[:, 1:] - energy_over_time[:, :-1]
+    decay_penalty = torch.mean(F.relu(energy_diff))
+
+    # encourage high to low freq transition
+    freq_range = torch.arange(freq_bins, device=device).unsqueeze(0).unsqueeze(0)
+    spectral_centroid = torch.sum(
+        torch.abs(generated_audio) * freq_range, dim=(1, 3)
+    ) / (torch.sum(torch.abs(generated_audio), dim=(1, 3)) + 1e-8)
+    centroid_shift = torch.mean(spectral_centroid[:, 1:] - spectral_centroid[:, :-1])
+    centroid_shift_penalty = F.relu(-centroid_shift)
+
+    # encourage different lengths
+    duration = torch.argmin(F.relu(0.1 - energy_over_time), dim=1)
+    duration_variance = torch.var(duration.float())
+    duration_penalty = -torch.log(duration_variance + 1e-6)
+
+    total_penalty = (
+        transient_penalty + decay_penalty + centroid_shift_penalty + duration_penalty
+    )
+
+    return total_penalty
+
+
 def calculate_diversity_penalty(generated_samples):
-    # Return a smaller loss as pairwise distances increase
     batch_size = generated_samples.size(0)
     flattened = generated_samples.view(batch_size, -1)
-    pairwise_distances = torch.pdist(flattened)
-    diversity_penalty = -torch.mean(pairwise_distances)
 
-    return 0.1 * diversity_penalty
+    similarity_matrix = F.cosine_similarity(
+        flattened.unsqueeze(1), flattened.unsqueeze(0), dim=2
+    )
+    mean_similarity = (
+        torch.sum(similarity_matrix) - torch.trace(similarity_matrix)
+    ) / (batch_size * (batch_size - 1))
+
+    diversity_penalty = -mean_similarity
+
+    return diversity_penalty
 
 
 # Training
@@ -64,9 +116,6 @@ def train_epoch(
     training_audio_data,
     device,
 ):
-    decay_penalty_weight = 0.1
-    diversity_penalty_weight = 0.1
-
     generator.train()
     discriminator.train()
     total_g_loss, total_d_loss = 0, 0
@@ -85,17 +134,30 @@ def train_epoch(
         optimizer_G.zero_grad()
         z = torch.randn(batch_size, LATENT_DIM, 1, 1).to(device)
         fake_audio_data = generator(z)
-        g_adv_loss = criterion(discriminator(fake_audio_data), real_labels)
-        decay_penalty = calculate_decay_penalty(
-            fake_audio_data, training_audio_data, device
-        )
-        # diversity_penalty = calculate_diversity_penalty(fake_audio_data)
 
+        # Loss calculations
+        g_adv_loss = criterion(discriminator(fake_audio_data), real_labels)
+
+        feat_match_weight = 0.1
+        # real_features = discriminator.get_features(real_audio_data)
+        # fake_features = discriminator.get_features(fake_audio_data)
+        # feat_match_penalty = calculate_feat_match_penalty(real_features, fake_features)
+
+        kick_character_penalty_weight = 0.1
+        kick_character_penalty = calculate_kick_character_penalty(
+            fake_audio_data, device
+        )
+
+        diversity_penalty_weight = 0.1
+        diversity_penalty = calculate_diversity_penalty(fake_audio_data)
+
+        print(g_adv_loss, kick_character_penalty, diversity_penalty)
         # Combine losses
         g_loss = (
             g_adv_loss
-            + decay_penalty * decay_penalty_weight
-            # + diversity_penalty * diversity_penalty_weight
+            # + feat_match_penalty * feat_match_weight
+            + kick_character_penalty * kick_character_penalty_weight
+            + diversity_penalty * diversity_penalty_weight
         )
 
         g_loss.backward()
