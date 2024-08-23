@@ -1,10 +1,10 @@
 import torch
 from architecture import Generator, LATENT_DIM
-from utils.helpers import amplitudes_to_wav, get_device, graph_spectrogram
+from utils.helpers import normalized_db_to_wav, get_device, graph_spectrogram
 
 # Initialize Generator
 device = get_device()
-model_path = "model/DCGAN_final_model.pth"
+model_path = "model/DCGAN.pth"
 generator = Generator()
 generator.load_state_dict(
     torch.load(model_path, map_location=torch.device(device), weights_only=False)
@@ -19,5 +19,4 @@ with torch.no_grad():
 
 generated_output = generated_output.squeeze().numpy()
 print("Generated output shape:", generated_output.shape)
-graph_spectrogram(generated_output, "Generated Sample")
-amplitudes_to_wav(generated_output, "DCGAN_generated_audio")
+normalized_db_to_wav(generated_output, "generated_audio")

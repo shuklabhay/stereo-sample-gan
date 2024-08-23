@@ -1,8 +1,8 @@
-from utils.helpers import (
-    amplitudes_to_wav,
+from helpers import (
+    normalized_db_to_wav,
     encode_sample,
     graph_spectrogram,
-    scale_normalized_db_to_amplis,
+    scale_normalized_loudness_to_magnitudes,
 )
 
 # Visualize quality loss from istft
@@ -11,9 +11,9 @@ loudness = encode_sample(sample)
 graph_spectrogram(loudness, "before istft")
 print(loudness.shape)
 
-amplis = scale_normalized_db_to_amplis(loudness)
+amplis = scale_normalized_loudness_to_magnitudes(loudness)
 
-amplitudes_to_wav(amplis, "test")
+normalized_db_to_wav(amplis, "test")
 
 saved = "model/test.wav"
 loudness2 = encode_sample(saved)
