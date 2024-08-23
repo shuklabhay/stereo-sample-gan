@@ -29,7 +29,7 @@ A kick drum's "defining" characteristics include:
 3. An overall "decaying" nature (spectral centroid shifts downwards)
 4. Ample variability between decay times
 
-<img alt='Features of a Kick Drum' src="static/kick-drum-features.png" width="325">
+<img alt='Features of a Kick Drum' src="static/kick-drum-features.png" width="350">
 <p><b>Fig 1:</b> <i>Visualization of key features of a kick drum.</i></p>
 
 ### Feature Extraction/Encoding
@@ -38,10 +38,8 @@ A simple DCGAN can not learn about the time-series component of audio, so this f
 
 While amplitude data (the output of the STFT) is important, this data is by nature skewed towards lower frequencies which contain higher intensities. To equalize the representation of frequencies in data the tensor of amplitude data is normalized to be in the range of 0 to 100 and then scaled into the logarithmic, decibal scale, which represents audio information as loudness, a more uniform scale relative to the entire frequency spectrum. The 0-100 scaling is to ensure consistent loudness information. A loudness threshold then sets all signals less than -90 decibals (auditory cutoff for the human ear) to be the minimum decibal value (a constant of -120) this data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
-<div style="flex-shrink: 0;">
 <img alt= 'Data processing comparison' src="static/magnitudes_vs_loudness.png" width=1000>
 <p><b>Fig 2:</b> <i>STFT audio information before and after feature extraction.</i></p>
-</div>
 
 Generated audio representations apply the same audio scaling in the opposite direction. The audio is also reconstreucted utilizing a inverse STFT in conjunction with the griffin-lim phase reconstruction algorithm[3]. This entire process preserves most, but not all audio information- a potential pitfall of this method (see STFT and iSTFT Validation)
 

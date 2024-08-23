@@ -24,40 +24,57 @@ def calculate_feat_match_penalty(real_features, fake_features):
     return loss
 
 
-def calculate_transient_penalty(generated_audio, device):
-    # Encourage transient
-    frames_for_transient = 5
+def calculate_decay_penalty(generated_audio, device):
+    # Encourage decay towards low frequencies
     batch_size, channels, frames, freq_bins = generated_audio.shape
 
     freq_weights = torch.linspace(1, 0, freq_bins, device=device)
     freq_weights = freq_weights.unsqueeze(0).unsqueeze(0).unsqueeze(0)
 
-    energy_over_time = torch.sum(generated_audio**2 * freq_weights, dim=(1, 3))
-    transient_penalty = -torch.mean(energy_over_time[:, :frames_for_transient])
+    weighted_energy_over_time = torch.sum(generated_audio**2 * freq_weights, dim=(1, 3))
+    energy_diff = weighted_energy_over_time[:, 1:] - weighted_energy_over_time[:, :-1]
 
-    return transient_penalty
-
-
-def calculate_decay_penalty(generated_audio):
-    # Encourage decaying
-    energy_over_time = torch.sum(generated_audio**2, dim=(1, 3))
-    energy_diff = energy_over_time[:, 1:] - energy_over_time[:, :-1]
     decay_penalty = torch.mean(F.relu(energy_diff))
 
     return decay_penalty
 
 
 def calculate_centroid_shift_penalty(generated_audio, device):
-    # Encourage high to low freq transition
+    transient_frames = 5
+    decay_frames = 20
     batch_size, channels, frames, freq_bins = generated_audio.shape
 
+    # Calculate the spectral centroid
     freq_range = torch.arange(freq_bins, device=device).unsqueeze(0).unsqueeze(0)
     spectral_centroid = torch.sum(
         torch.abs(generated_audio) * freq_range, dim=(1, 3)
     ) / (torch.sum(torch.abs(generated_audio), dim=(1, 3)) + 1e-8)
 
-    centroid_shift = torch.mean(spectral_centroid[:, 1:] - spectral_centroid[:, :-1])
-    centroid_shift_penalty = F.relu(-centroid_shift)
+    # Transient section: downward shift
+    transient_centroid_shift = torch.mean(
+        spectral_centroid[:, 1:transient_frames]
+        - spectral_centroid[:, : transient_frames - 1]
+    )
+    transient_penalty = F.relu(transient_centroid_shift)
+
+    # Decay section: downward shift
+    decay_centroid_shift = torch.mean(
+        spectral_centroid[:, transient_frames : transient_frames + decay_frames]
+        - spectral_centroid[
+            :, transient_frames - 1 : transient_frames + decay_frames - 1
+        ]
+    )
+    decay_penalty = F.relu(decay_centroid_shift / 5)
+
+    # Release section: downward shift
+    release_centroid_shift = torch.mean(
+        spectral_centroid[:, transient_frames + decay_frames + 1 :]
+        - spectral_centroid[:, transient_frames + decay_frames : -1]
+    )
+    release_penalty = F.relu(release_centroid_shift)
+
+    # Total penalty
+    centroid_shift_penalty = transient_penalty + decay_penalty + release_penalty
 
     return centroid_shift_penalty
 
@@ -115,20 +132,17 @@ def train_epoch(
 
         # real_features = discriminator.get_features(real_audio_data)
         # fake_features = discriminator.get_features(fake_audio_data)
-        # feat_match_penalty = 0.1 * calculate_feat_match_penalty(real_features, fake_features) # be kinda like real audio
+        # feat_match_penalty = 0.1 * calculate_feat_match_penalty(real_features, fake_features)
 
-        transient_penalty = 0.1 * calculate_transient_penalty(fake_audio_data, device)
-        decay_penalty = 0.1 * calculate_decay_penalty(fake_audio_data)
-        centroid_shift_penalty = 0.1 * calculate_centroid_shift_penalty(
+        decay_penalty = 0.1 * calculate_decay_penalty(fake_audio_data, device)
+        centroid_shift_penalty = 0.4 * calculate_centroid_shift_penalty(
             fake_audio_data, device
         )
-        kick_character_penalty = (
-            transient_penalty + decay_penalty + centroid_shift_penalty
-        )
+        kick_character_penalty = decay_penalty + centroid_shift_penalty
 
         diversity_penalty = 0.1 * calculate_diversity_penalty(
             fake_audio_data, training_audio_data, device
-        )  # be different
+        )
 
         # Combine losses
         g_loss = (
