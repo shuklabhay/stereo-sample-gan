@@ -7,8 +7,6 @@ from utils.helpers import (
     scale_data_to_range,
 )
 
-torch.autograd.set_detect_anomaly(True)
-
 # Constants
 N_EPOCHS = 2
 VALIDATION_INTERVAL = int(N_EPOCHS / N_EPOCHS)
@@ -26,9 +24,10 @@ def smooth_labels(tensor):
 
 
 # Generator Loss Metrics
-# Feature matching penalty
-# Spectral centroid shift penalty
-# Global sample diversity penalty
+# Feature matching
+# Spectral centroid
+# Spectral rolloff
+# Global sample diversity
 
 
 # Discriminator Loss Metrics

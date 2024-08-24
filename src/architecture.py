@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
 
 # Constants Constants
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 LATENT_DIM = 128
 N_EPOCHS = 10
 
@@ -50,23 +50,23 @@ class Generator(nn.Module):
         return x
 
 
-class SelfAttention(nn.Module):
+class LinearAttention(nn.Module):
     def __init__(self, in_channels):
-        super(SelfAttention, self).__init__()
-        self.query = spectral_norm(nn.Conv2d(in_channels, in_channels // 8, 1))
-        self.key = spectral_norm(nn.Conv2d(in_channels, in_channels // 8, 1))
-        self.value = spectral_norm(nn.Conv2d(in_channels, in_channels, 1))
+        super(LinearAttention, self).__init__()
+        self.query = nn.Conv2d(in_channels, in_channels // 8, kernel_size=1)
+        self.key = nn.Conv2d(in_channels, in_channels // 8, kernel_size=1)
+        self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
-        batch_size, channels, length, width = x.size()  # Intentionally dynamic
-        proj_query = self.query(x).view(batch_size, -1, length * width).permute(0, 2, 1)
-        proj_key = self.key(x).view(batch_size, -1, length * width)
-        energy = torch.bmm(proj_query, proj_key)
-        attention = F.softmax(energy, dim=-1)
-        proj_value = self.value(x).view(batch_size, -1, length * width)
-        out = torch.bmm(proj_value, attention.permute(0, 2, 1))
-        out = out.view(batch_size, channels, length, width)
+        batch_size, channels, height, width = x.size()
+        query = self.query(x).view(batch_size, -1, height * width).permute(0, 2, 1)
+        key = self.key(x).view(batch_size, -1, height * width)
+        value = self.value(x).view(batch_size, -1, height * width)
+
+        attention = F.softmax(torch.bmm(query, key), dim=-1)
+        out = torch.bmm(value, attention.permute(0, 2, 1))
+        out = out.view(batch_size, channels, height, width)
         out = self.gamma * out + x
 
         return out
@@ -82,27 +82,27 @@ class Discriminator(nn.Module):
             spectral_norm(nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(8),
-            SelfAttention(8),
+            LinearAttention(8),
             spectral_norm(nn.Conv2d(8, 16, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(16),
-            SelfAttention(16),
+            # LinearAttention(16),
             spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(32),
-            # SelfAttention(32),
+            # LinearAttention(32),
             spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(64),
-            # SelfAttention(64),
+            # LinearAttention(64),
             spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(128),
-            # SelfAttention(128),
+            # LinearAttention(128),
             spectral_norm(nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(256),
-            # SelfAttention(256),
+            # LinearAttention(256),
             nn.Conv2d(256, 1, kernel_size=4, stride=2, padding=1),
             nn.Flatten(),
             nn.Sigmoid(),
