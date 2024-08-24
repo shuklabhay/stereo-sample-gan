@@ -16,8 +16,8 @@ from utils.helpers import (
 )
 
 # Constants
-LR_G = 0.002
-LR_D = 0.001
+LR_G = 0.005
+LR_D = 0.005
 
 # Load data
 all_spectrograms = load_npy_data(compiled_data_path)
@@ -33,9 +33,9 @@ val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 # Initialize models and optimizers
 generator = Generator()
 discriminator = Discriminator()
-criterion = nn.BCEWithLogitsLoss()
-optimizer_G = optim.Adam(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  # type: ignore
-optimizer_D = optim.Adam(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
+criterion = nn.MSELoss()
+optimizer_G = optim.AdamW(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  # type: ignore
+optimizer_D = optim.AdamW(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
 
 device = get_device()
 generator.to(device)

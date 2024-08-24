@@ -10,9 +10,19 @@ from utils.helpers import (
 torch.autograd.set_detect_anomaly(True)
 
 # Constants
-N_EPOCHS = 1
-VALIDATION_INTERVAL = 1
+N_EPOCHS = 2
+VALIDATION_INTERVAL = int(N_EPOCHS / N_EPOCHS)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
+
+
+# Train Utility
+def smooth_labels(tensor):
+    amount = 0.02
+
+    if tensor[0] == 1:
+        return tensor + amount * torch.rand_like(tensor)
+    else:
+        return tensor - amount * torch.rand_like(tensor)
 
 
 # Generator Loss Metrics
@@ -26,6 +36,25 @@ def calculate_spectral_diff(real_audio_data, fake_audio_data):
     spectral_diff = torch.mean(torch.abs(real_audio_data - fake_audio_data))
 
     return torch.mean(spectral_diff)
+
+
+def compute_discrim_loss(
+    criterion,
+    discriminator,
+    real_audio_data,
+    fake_audio_data,
+    real_labels,
+    fake_labels,
+):
+    real_loss = criterion(discriminator(real_audio_data).view(-1, 1), real_labels)
+    fake_loss = criterion(discriminator(fake_audio_data).view(-1, 1), fake_labels)
+
+    d_adv_loss = (real_loss + fake_loss) / 2
+    spectral_diff = 0.2 * calculate_spectral_diff(real_audio_data, fake_audio_data)
+
+    d_loss = d_adv_loss + spectral_diff
+
+    return d_loss
 
 
 # Training
@@ -47,14 +76,6 @@ def train_epoch(
         batch_size = real_audio_data.size(0)
         real_audio_data = real_audio_data.to(device)
 
-        def smooth_labels(tensor):
-            amount = 0.02
-
-            if tensor[0] == 1:
-                return tensor + amount * torch.rand_like(tensor)
-            else:
-                return tensor - amount * torch.rand_like(tensor)
-
         real_labels = smooth_labels((torch.ones(batch_size, 1)).to(device))
         fake_labels = smooth_labels((torch.zeros(batch_size, 1)).to(device))
 
@@ -68,23 +89,21 @@ def train_epoch(
 
         g_loss = g_adv_loss
 
-        g_loss.backward()
+        g_loss.backward(retain_graph=True)
         optimizer_G.step()
         total_g_loss += g_loss.item()
 
         # Train discriminator
         optimizer_D.zero_grad()
-        real_loss = criterion(discriminator(real_audio_data).view(-1, 1), real_labels)
-        fake_loss = criterion(
-            discriminator(fake_audio_data.detach()).view(-1, 1), fake_labels
+        fake_audio_data = fake_audio_data.detach()
+        d_loss = compute_discrim_loss(
+            criterion,
+            discriminator,
+            real_audio_data,
+            fake_audio_data,
+            real_labels,
+            fake_labels,
         )
-
-        d_adv_loss = (real_loss + fake_loss) / 2
-        spectral_diff = 0.2 * calculate_spectral_diff(real_audio_data, fake_audio_data)
-
-        print(spectral_diff)
-
-        d_loss = d_adv_loss + spectral_diff
 
         d_loss.backward()
         optimizer_D.step()
@@ -111,9 +130,14 @@ def validate(generator, discriminator, dataloader, criterion, device):
 
             g_loss = criterion(discriminator(fake_audio_data), real_labels)
             total_g_loss += g_loss.item()
-            real_loss = criterion(discriminator(real_audio_data), real_labels)
-            fake_loss = criterion(discriminator(fake_audio_data), fake_labels)
-            d_loss = (real_loss + fake_loss) / 2
+            d_loss = compute_discrim_loss(
+                criterion,
+                discriminator,
+                real_audio_data,
+                fake_audio_data,
+                real_labels,
+                fake_labels,
+            )
             total_d_loss += d_loss.item()
 
     return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
