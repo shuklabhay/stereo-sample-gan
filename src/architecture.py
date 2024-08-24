@@ -17,29 +17,28 @@ SAVE_INTERVAL = int(N_EPOCHS / 1)
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
-        self.conv_transpose_blocks = nn.Sequential(
-            nn.ConvTranspose2d(LATENT_DIM, 256, kernel_size=4, stride=1, padding=0),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+        self.deconv_blocks = nn.Sequential(
+            nn.ConvTranspose2d(LATENT_DIM, 128, kernel_size=4, stride=1, padding=0),
             nn.BatchNorm2d(128),
-            nn.ReLU(),
+            nn.ReLU(),  # Shape: (BATCH_SIZE, 128, 4, 4)
             nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(64),
-            nn.ReLU(),
+            nn.ReLU(),  # Shape: (BATCH_SIZE, 64, 8, 8)
             nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(32),
-            nn.ReLU(),
+            nn.ReLU(),  # Shape: (BATCH_SIZE, 32, 16, 16)
             nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(16),
-            nn.ReLU(),
+            nn.ReLU(),  # Shape: (BATCH_SIZE, 16, 32, 32)
             nn.ConvTranspose2d(16, 8, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(8),
-            nn.ReLU(),
+            nn.ReLU(),  # Shape: (BATCH_SIZE, 8, 64, 64)
             nn.ConvTranspose2d(8, 4, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(4),
-            nn.ReLU(),
-            nn.ConvTranspose2d(4, N_CHANNELS, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(),  # Shape: (BATCH_SIZE, 4, 128, 128)
+            nn.ConvTranspose2d(
+                4, N_CHANNELS, kernel_size=4, stride=1, padding=1
+            ),  # Shape: (BATCH_SIZE, 2, 256, 256)
             nn.Upsample(
                 size=(N_FRAMES, N_FREQ_BINS), mode="bilinear", align_corners=False
             ),
@@ -47,7 +46,7 @@ class Generator(nn.Module):
         )
 
     def forward(self, z):
-        x = self.conv_transpose_blocks(z)
+        x = self.deconv_blocks(z)
         return x
 
 
@@ -70,7 +69,6 @@ class SelfAttention(nn.Module):
         out = out.view(batch_size, channels, length, width)
         out = self.gamma * out + x
 
-        print(out.shape)
         return out
 
 
@@ -114,15 +112,8 @@ class Discriminator(nn.Module):
         features = []
         for layer in self.conv_blocks:
             x = layer(x)
-            print(x.shape)
             features.append(x)
         return features
-
-    def add_noise(self, x):
-        noise_factor = 0.05
-
-        noise = torch.randn_like(x) * noise_factor
-        return x + noise
 
     def forward(self, x):
         x = self.conv_blocks(x)
