@@ -16,8 +16,9 @@ from utils.helpers import (
 )
 
 # Constants
-LR_G = 0.005
-LR_D = 0.005
+LR_G = 0.004
+LR_D = 0.004
+LR_DECAY_RATE = 0.98
 
 # Load data
 all_spectrograms = load_npy_data(compiled_data_path)
@@ -36,6 +37,9 @@ discriminator = Discriminator()
 criterion = nn.MSELoss()
 optimizer_G = optim.AdamW(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  # type: ignore
 optimizer_D = optim.AdamW(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
+scheduler_G = optim.lr_scheduler.ExponentialLR(optimizer_G, gamma=LR_DECAY_RATE)
+scheduler_D = optim.lr_scheduler.ExponentialLR(optimizer_D, gamma=LR_DECAY_RATE)
+
 
 device = get_device()
 generator.to(device)
@@ -50,6 +54,8 @@ training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
+    scheduler_G,
+    scheduler_D,
     all_spectrograms,
     device,
 )

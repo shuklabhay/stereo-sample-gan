@@ -37,6 +37,12 @@ def calculate_spectral_diff(real_audio_data, fake_audio_data):
     return torch.mean(spectral_diff)
 
 
+def calculate_spectral_convergence(real_audio_data, fake_audio_data):
+    return torch.norm(fake_audio_data - real_audio_data, p=2) / (
+        torch.norm(real_audio_data, p=2) + 1e-8
+    )
+
+
 def compute_discrim_loss(
     criterion,
     discriminator,
@@ -45,14 +51,18 @@ def compute_discrim_loss(
     real_labels,
     fake_labels,
 ):
+    # Adv Loss
     real_loss = criterion(discriminator(real_audio_data).view(-1, 1), real_labels)
     fake_loss = criterion(discriminator(fake_audio_data).view(-1, 1), fake_labels)
-
     d_adv_loss = (real_loss + fake_loss) / 2
+
+    # Extra metrics
     spectral_diff = 0.2 * calculate_spectral_diff(real_audio_data, fake_audio_data)
+    spectral_convergence = 0.1 * calculate_spectral_convergence(
+        real_audio_data, fake_audio_data
+    )
 
-    d_loss = d_adv_loss + spectral_diff
-
+    d_loss = d_adv_loss + spectral_diff + spectral_convergence
     return d_loss
 
 
@@ -64,6 +74,8 @@ def train_epoch(
     criterion,
     optimizer_G,
     optimizer_D,
+    scheduler_G,
+    scheduler_D,
     training_audio_data,
     device,
 ):
@@ -90,6 +102,7 @@ def train_epoch(
 
         g_loss.backward(retain_graph=True)
         optimizer_G.step()
+        scheduler_G.step()
         total_g_loss += g_loss.item()
 
         # Train discriminator
@@ -106,6 +119,7 @@ def train_epoch(
 
         d_loss.backward()
         optimizer_D.step()
+        scheduler_D.step()
         total_d_loss += d_loss.item()
 
     return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
@@ -150,6 +164,8 @@ def training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
+    scheduler_G,
+    scheduler_D,
     training_audio_data,
     device,
 ):
@@ -161,6 +177,8 @@ def training_loop(
             criterion,
             optimizer_G,
             optimizer_D,
+            scheduler_G,
+            scheduler_D,
             training_audio_data,
             device,
         )
