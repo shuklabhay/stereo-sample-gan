@@ -7,10 +7,22 @@ from utils.helpers import (
     scale_data_to_range,
 )
 
+torch.autograd.set_detect_anomaly(True)
+
 # Constants
 N_EPOCHS = 1
 VALIDATION_INTERVAL = 1
 SAVE_INTERVAL = int(N_EPOCHS / 1)
+
+
+# Utility functions
+def smooth_labels(tensor, isZeros):
+    amount = 0.05
+
+    if isZeros is True:
+        return tensor + amount * torch.rand_like(tensor)
+    else:
+        return tensor - amount * torch.rand_like(tensor)
 
 
 # Generator Loss Metrics
@@ -101,7 +113,7 @@ def calculate_diversity_penalty(generated_audio, training_audio_data, device):
 def calculate_spectral_diff(real_audio_data, fake_audio_data):
     spectral_diff = torch.mean(torch.abs(real_audio_data - fake_audio_data))
 
-    return spectral_diff
+    return torch.mean(spectral_diff)
 
 
 # Training
@@ -123,16 +135,12 @@ def train_epoch(
         batch_size = real_audio_data.size(0)
         real_audio_data = real_audio_data.to(device)
 
-        def smooth_labels(tensor):
-            smoothing_factor = 0.1
-            num_classes = tensor.size(-1)
-            uniform_dist = torch.ones_like(tensor) / num_classes
-            return (1 - smoothing_factor) * tensor + smoothing_factor * uniform_dist
-
-        real_labels = smooth_labels(torch.ones(batch_size).unsqueeze(1).to(device))
-        fake_labels = smooth_labels(torch.zeros(batch_size).unsqueeze(1).to(device))
-
-        print(real_labels)
+        real_labels = smooth_labels(
+            (torch.ones(batch_size).unsqueeze(1)).to(device), False
+        )
+        fake_labels = smooth_labels(
+            (torch.zeros(batch_size).unsqueeze(1)).to(device), True
+        )
 
         # Train generator
         optimizer_G.zero_grad()
@@ -165,19 +173,17 @@ def train_epoch(
             # + diversity_penalty
         )
 
-        g_loss.backward()
+        g_loss.backward(retain_graph=True)
         optimizer_G.step()
         total_g_loss += g_loss.item()
 
         # Train discriminator
         optimizer_D.zero_grad()
         real_audio_data_noisy = discriminator.add_noise(real_audio_data)
-        fake_audio_data_noisy = discriminator.add_noise(fake_audio_data)
+        fake_audio_data_noisy = discriminator.add_noise(fake_audio_data.detach())
 
         real_loss = criterion(discriminator(real_audio_data_noisy), real_labels)
-        fake_loss = criterion(
-            discriminator(fake_audio_data_noisy.detach()), fake_labels
-        )
+        fake_loss = criterion(discriminator(fake_audio_data_noisy), fake_labels)
 
         # Discriminator Loss
         d_adv_loss = (real_loss + fake_loss) / 2
