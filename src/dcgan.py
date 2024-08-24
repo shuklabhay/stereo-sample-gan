@@ -16,9 +16,9 @@ from utils.helpers import (
 )
 
 # Constants
-LR_G = 0.004
-LR_D = 0.004
-LR_DECAY_RATE = 0.98
+LR_G = 0.005
+LR_D = 0.005
+LR_DECAY_RATE = 1
 
 # Load data
 all_spectrograms = load_npy_data(compiled_data_path)
@@ -56,6 +56,5 @@ training_loop(
     optimizer_D,
     scheduler_G,
     scheduler_D,
-    all_spectrograms,
     device,
 )

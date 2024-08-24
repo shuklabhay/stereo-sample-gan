@@ -4,13 +4,9 @@ from utils.helpers import N_CHANNELS, N_FRAMES, N_FREQ_BINS
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
 
-# Constants Constants
+# Constants
 BATCH_SIZE = 16
 LATENT_DIM = 128
-N_EPOCHS = 10
-
-VALIDATION_INTERVAL = int(N_EPOCHS / 2)
-SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 
 # Model Components
@@ -60,17 +56,17 @@ class LinearAttention(nn.Module):
         self.gamma = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
-        batch_size, channels, height, width = x.size()
+        batch, channels, height, width = x.size()
 
-        query = self.query(x).view(batch_size, -1, height * width)
-        key = self.key(x).view(batch_size, -1, height * width).permute(0, 2, 1)
-        value = self.value(x).view(batch_size, -1, height * width)
+        query = self.query(x).view(batch, -1, height * width)
+        key = self.key(x).view(batch, -1, height * width).permute(0, 2, 1)
+        value = self.value(x).view(batch, -1, height * width)
 
         attention = torch.bmm(key, query)
         attention = F.normalize(F.relu(attention), p=1, dim=1)
 
         out = torch.bmm(value, attention)
-        out = out.view(batch_size, channels, height, width)
+        out = out.view(batch, channels, height, width)
         out = self.gamma * out + x
         return out
 
@@ -103,11 +99,13 @@ class Discriminator(nn.Module):
             nn.Sigmoid(),
         )
 
-    def get_features(self, x):
+    def extract_features(self, x):
+        feature_indices = [3, 9]  # Conv block index
         features = []
-        for layer in self.conv_blocks:
+        for i, layer in enumerate(self.conv_blocks):
             x = layer(x)
-            features.append(x)
+            if i in feature_indices:
+                features.append(x)
         return features
 
     def forward(self, x):

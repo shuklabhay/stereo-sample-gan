@@ -47,18 +47,11 @@ Generated audio representations apply the same audio scaling in the opposite dir
 
 ### Architecture
 
-This model seeks to replicate a DCGAN's multi-channel image generation capabilities[1] to create varied two channel audio representations. The Generator takes in 100 latent dimensions and passes it into 9 convolution transpose blocks, each consisting of a convolution transpose layer, a batch normalization layer, and a ReLU activation. After convolving, the Generator upsamples the output from a two channel 256 by 256 output to to a two channel output of frames by frequency bins and applies a hyperbolic tangent activation function. The Discriminator upscales audio from frames by frequency bins to 256 by 256 to then pass through 9 convolution blocks, each consisting of a convolution layer with spectral normalization to prevent model collapse, a batch normalization layer, and a Leaky ReLU activation. After convolution, the probability of an audio clip audio being real is returned using a sigmoid activation. [TALK ABT DISCRIM ALSO USING ATTENTION]
+This model seeks to replicate a DCGAN's multi-channel image generation capabilities[1] to create varied two channel audio representations.
 
 ### Training
 
-This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 32. The Generator and Discriminator both utilize unique loss metrics and an Adam optimizer [learning rates]. [talk about loss optimization stuff once it works]
-
-Finally, overconfidence is prevented using label smoothing. The model is trained over ten epochs and Validation occurs every 5 epochs
-
-EXPLAIN LOSS DECAY OPTIMIZING STUFF IN MORE DETAIL ONCE IT WORKS WITH VARIATION
-
-ADD RESULTS&DISCUSSION WHEN MODEL WORKS BETTER
-ALSO ADD CITATIONS ON INTRO PARAGRAPH 2
+This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16.
 
 ## Results and Discussion
 

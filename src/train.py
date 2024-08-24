@@ -24,10 +24,37 @@ def smooth_labels(tensor):
 
 
 # Generator Loss Metrics
-# Feature matching
 # Spectral centroid
 # Spectral rolloff
 # Global sample diversity
+def calculate_feature_match(discriminator, real_audio_data, fake_audio_data):
+    real_features = discriminator.extract_features(real_audio_data)
+    fake_features = discriminator.extract_features(fake_audio_data)
+
+    loss = 0
+    for real_feat, fake_feat in zip(real_features, fake_features):
+        loss += torch.mean(torch.abs(real_feat - fake_feat))
+
+    return loss / len(real_features)
+
+
+def compute_generator_loss(
+    criterion,
+    discriminator,
+    real_audio_data,
+    fake_audio_data,
+    real_labels,
+):
+    # Adv Loss
+    g_adv_loss = criterion(discriminator(fake_audio_data).view(-1, 1), real_labels)
+
+    # Extra metrics
+    feat_match = 0.4 * calculate_feature_match(
+        discriminator, real_audio_data, fake_audio_data
+    )
+
+    g_loss = g_adv_loss + feat_match
+    return g_loss
 
 
 # Discriminator Loss Metrics
@@ -62,7 +89,7 @@ def compute_discrim_loss(
         real_audio_data, fake_audio_data
     )
 
-    d_loss = d_adv_loss + spectral_diff + spectral_convergence
+    d_loss = d_adv_loss + spectral_diff
     return d_loss
 
 
@@ -76,7 +103,6 @@ def train_epoch(
     optimizer_D,
     scheduler_G,
     scheduler_D,
-    training_audio_data,
     device,
 ):
     generator.train()
@@ -84,21 +110,27 @@ def train_epoch(
     total_g_loss, total_d_loss = 0, 0
 
     for i, (real_audio_data,) in enumerate(dataloader):
-        batch_size = real_audio_data.size(0)
+        batch = real_audio_data.size(0)
         real_audio_data = real_audio_data.to(device)
 
-        real_labels = smooth_labels((torch.ones(batch_size, 1)).to(device))
-        fake_labels = smooth_labels((torch.zeros(batch_size, 1)).to(device))
+        real_labels = smooth_labels((torch.ones(batch, 1)).to(device))
+        fake_labels = smooth_labels((torch.zeros(batch, 1)).to(device))
 
         # Train generator
         optimizer_G.zero_grad()
-        z = torch.randn(batch_size, LATENT_DIM, 1, 1).to(device)
+        z = torch.randn(batch, LATENT_DIM, 1, 1).to(device)
         fake_audio_data = generator(z)
 
         # Generator Loss
         g_adv_loss = criterion(discriminator(fake_audio_data).view(-1, 1), real_labels)
 
-        g_loss = g_adv_loss
+        g_loss = compute_generator_loss(
+            criterion,
+            discriminator,
+            real_audio_data,
+            fake_audio_data,
+            real_labels,
+        )
 
         g_loss.backward(retain_graph=True)
         optimizer_G.step()
@@ -132,13 +164,13 @@ def validate(generator, discriminator, dataloader, criterion, device):
 
     with torch.no_grad():
         for (real_audio_data,) in dataloader:
-            batch_size = real_audio_data.size(0)
+            batch = real_audio_data.size(0)
             real_audio_data = real_audio_data.to(device)
 
-            real_labels = torch.ones(batch_size, 1).to(device)
-            fake_labels = torch.zeros(batch_size, 1).to(device)
+            real_labels = torch.ones(batch, 1).to(device)
+            fake_labels = torch.zeros(batch, 1).to(device)
 
-            z = torch.randn(batch_size, LATENT_DIM, 1, 1).to(device)
+            z = torch.randn(batch, LATENT_DIM, 1, 1).to(device)
             fake_audio_data = generator(z)
 
             g_loss = criterion(discriminator(fake_audio_data), real_labels)
@@ -166,7 +198,6 @@ def training_loop(
     optimizer_D,
     scheduler_G,
     scheduler_D,
-    training_audio_data,
     device,
 ):
     for epoch in range(N_EPOCHS):
@@ -179,7 +210,6 @@ def training_loop(
             optimizer_D,
             scheduler_G,
             scheduler_D,
-            training_audio_data,
             device,
         )
 
