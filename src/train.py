@@ -24,10 +24,7 @@ def smooth_labels(tensor):
 
 
 # Generator Loss Metrics
-# Spectral centroid
-# Spectral rolloff
-# Global sample diversity
-def calculate_feature_match(discriminator, real_audio_data, fake_audio_data):
+def calculate_feature_match_diff(discriminator, real_audio_data, fake_audio_data):
     real_features = discriminator.extract_features(real_audio_data)
     fake_features = discriminator.extract_features(fake_audio_data)
 
@@ -36,6 +33,25 @@ def calculate_feature_match(discriminator, real_audio_data, fake_audio_data):
         loss += torch.mean(torch.abs(real_feat - fake_feat))
 
     return loss / len(real_features)
+
+
+def calculate_spectral_rolloff_diff(real_spectrograms, fake_spectrograms):
+    rolloff_thresh = 0.85
+    total_energy_real = torch.sum(real_spectrograms, dim=3)
+    total_energy_fake = torch.sum(fake_spectrograms, dim=3)
+
+    real_rolloff = torch.searchsorted(
+        torch.cumsum(real_spectrograms, dim=3),
+        (total_energy_real * rolloff_thresh).unsqueeze(3),
+        right=True,
+    )
+    fake_rolloff = torch.searchsorted(
+        torch.cumsum(fake_spectrograms, dim=3),
+        (total_energy_fake * rolloff_thresh).unsqueeze(3),
+        right=True,
+    )
+
+    return torch.mean(torch.abs(real_rolloff - fake_rolloff))
 
 
 def compute_generator_loss(
@@ -49,11 +65,19 @@ def compute_generator_loss(
     g_adv_loss = criterion(discriminator(fake_audio_data).view(-1, 1), real_labels)
 
     # Extra metrics
-    feat_match = 0.4 * calculate_feature_match(
+    feat_match = 0.4 * calculate_feature_match_diff(
         discriminator, real_audio_data, fake_audio_data
     )
+    spectral_rolloff = 0.3 * calculate_spectral_rolloff_diff(
+        real_audio_data, fake_audio_data
+    )
 
-    g_loss = g_adv_loss + feat_match
+    g_loss = (
+        # Force vertical
+        g_adv_loss
+        + feat_match
+        # + spectral_rolloff
+    )
     return g_loss
 
 
@@ -64,7 +88,7 @@ def calculate_spectral_diff(real_audio_data, fake_audio_data):
     return torch.mean(spectral_diff)
 
 
-def calculate_spectral_convergence(real_audio_data, fake_audio_data):
+def calculate_spectral_convergence_diff(real_audio_data, fake_audio_data):
     return torch.norm(fake_audio_data - real_audio_data, p=2) / (
         torch.norm(real_audio_data, p=2) + 1e-8
     )
@@ -84,12 +108,17 @@ def compute_discrim_loss(
     d_adv_loss = (real_loss + fake_loss) / 2
 
     # Extra metrics
-    spectral_diff = 0.2 * calculate_spectral_diff(real_audio_data, fake_audio_data)
-    spectral_convergence = 0.1 * calculate_spectral_convergence(
+    spectral_diff = 0.3 * calculate_spectral_diff(real_audio_data, fake_audio_data)
+    spectral_convergence = 0.2 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
     )
 
-    d_loss = d_adv_loss + spectral_diff
+    d_loss = (
+        # Force vertical
+        d_adv_loss
+        + spectral_diff
+        # + spectral_convergence
+    )
     return d_loss
 
 

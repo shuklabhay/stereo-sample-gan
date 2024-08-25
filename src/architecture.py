@@ -10,6 +10,35 @@ LATENT_DIM = 128
 
 
 # Model Components
+class LinearAttention(nn.Module):
+    def __init__(self, in_channels):
+        super(LinearAttention, self).__init__()
+        self.reduced_channels = max(in_channels // 8, 1)
+        self.query = nn.Conv2d(
+            in_channels, self.reduced_channels, kernel_size=1, groups=1
+        )
+        self.key = nn.Conv2d(
+            in_channels, self.reduced_channels, kernel_size=1, groups=1
+        )
+        self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1, groups=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        batch, channels, height, width = x.size()
+
+        query = self.query(x).view(batch, -1, height * width)
+        key = self.key(x).view(batch, -1, height * width).permute(0, 2, 1)
+        value = self.value(x).view(batch, -1, height * width)
+
+        attention = torch.bmm(key, query)
+        attention = F.normalize(F.relu(attention), p=1, dim=1)
+
+        out = torch.bmm(value, attention)
+        out = out.view(batch, channels, height, width)
+        out = self.gamma * out + x
+        return out
+
+
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
@@ -21,6 +50,7 @@ class Generator(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(),  # Shape: (BATCH_SIZE, 64, 8, 8)
             nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
+            # LinearAttention(32),
             nn.BatchNorm2d(32),
             nn.ReLU(),  # Shape: (BATCH_SIZE, 32, 16, 16)
             nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
@@ -40,35 +70,6 @@ class Generator(nn.Module):
     def forward(self, z):
         x = self.deconv_blocks(z)
         return x
-
-
-class LinearAttention(nn.Module):
-    def __init__(self, in_channels, reduction_factor=8, groups=1):
-        super(LinearAttention, self).__init__()
-        self.reduced_channels = max(in_channels // reduction_factor, groups)
-        self.query = nn.Conv2d(
-            in_channels, self.reduced_channels, kernel_size=1, groups=groups
-        )
-        self.key = nn.Conv2d(
-            in_channels, self.reduced_channels, kernel_size=1, groups=groups
-        )
-        self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1, groups=groups)
-        self.gamma = nn.Parameter(torch.zeros(1))
-
-    def forward(self, x):
-        batch, channels, height, width = x.size()
-
-        query = self.query(x).view(batch, -1, height * width)
-        key = self.key(x).view(batch, -1, height * width).permute(0, 2, 1)
-        value = self.value(x).view(batch, -1, height * width)
-
-        attention = torch.bmm(key, query)
-        attention = F.normalize(F.relu(attention), p=1, dim=1)
-
-        out = torch.bmm(value, attention)
-        out = out.view(batch, channels, height, width)
-        out = self.gamma * out + x
-        return out
 
 
 class Discriminator(nn.Module):
