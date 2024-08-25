@@ -44,12 +44,12 @@ def calculate_spectral_rolloff_diff(real_spectrograms, fake_spectrograms):
         torch.cumsum(real_spectrograms, dim=3),
         (total_energy_real * rolloff_thresh).unsqueeze(3),
         right=True,
-    )
+    ).float()
     fake_rolloff = torch.searchsorted(
         torch.cumsum(fake_spectrograms, dim=3),
         (total_energy_fake * rolloff_thresh).unsqueeze(3),
         right=True,
-    )
+    ).float()
 
     return torch.mean(torch.abs(real_rolloff - fake_rolloff))
 
@@ -65,18 +65,19 @@ def compute_generator_loss(
     g_adv_loss = criterion(discriminator(fake_audio_data).view(-1, 1), real_labels)
 
     # Extra metrics
-    feat_match = 0.4 * calculate_feature_match_diff(
+    feat_match = 0.45 * calculate_feature_match_diff(
         discriminator, real_audio_data, fake_audio_data
-    )
-    spectral_rolloff = 0.3 * calculate_spectral_rolloff_diff(
+    )  # up this weight+train longer but RLLY RLLY GOOD METRIC FOR SHAPE+TONE VARIATION
+    spectral_rolloff = 0.001 * calculate_spectral_rolloff_diff(
         real_audio_data, fake_audio_data
-    )
+    )  # empircally reduces model performance
 
     g_loss = (
         # Force vertical
         g_adv_loss
-        + feat_match
-        # + spectral_rolloff
+        + feat_match  # compare features at layers
+        # + spectral_rolloff  # compare audio concentration thresh points
+        # + spectral_centroid # compare audio spread centers
     )
     return g_loss
 
@@ -111,13 +112,13 @@ def compute_discrim_loss(
     spectral_diff = 0.3 * calculate_spectral_diff(real_audio_data, fake_audio_data)
     spectral_convergence = 0.2 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
-    )
+    )  ## maybe increase both of these weights
 
     d_loss = (
         # Force vertical
         d_adv_loss
-        + spectral_diff
-        # + spectral_convergence
+        + spectral_diff  # compare differences
+        + spectral_convergence  # compare total shape similarities
     )
     return d_loss
 
@@ -130,8 +131,6 @@ def train_epoch(
     criterion,
     optimizer_G,
     optimizer_D,
-    scheduler_G,
-    scheduler_D,
     device,
 ):
     generator.train()
@@ -163,7 +162,6 @@ def train_epoch(
 
         g_loss.backward(retain_graph=True)
         optimizer_G.step()
-        scheduler_G.step()
         total_g_loss += g_loss.item()
 
         # Train discriminator
@@ -180,7 +178,6 @@ def train_epoch(
 
         d_loss.backward()
         optimizer_D.step()
-        scheduler_D.step()
         total_d_loss += d_loss.item()
 
     return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
@@ -202,7 +199,13 @@ def validate(generator, discriminator, dataloader, criterion, device):
             z = torch.randn(batch, LATENT_DIM, 1, 1).to(device)
             fake_audio_data = generator(z)
 
-            g_loss = criterion(discriminator(fake_audio_data), real_labels)
+            g_loss = compute_generator_loss(
+                criterion,
+                discriminator,
+                real_audio_data,
+                fake_audio_data,
+                real_labels,
+            )
             total_g_loss += g_loss.item()
             d_loss = compute_discrim_loss(
                 criterion,
@@ -225,8 +228,6 @@ def training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
-    scheduler_G,
-    scheduler_D,
     device,
 ):
     for epoch in range(N_EPOCHS):
@@ -237,8 +238,6 @@ def training_loop(
             criterion,
             optimizer_G,
             optimizer_D,
-            scheduler_G,
-            scheduler_D,
             device,
         )
 
@@ -262,7 +261,7 @@ def training_loop(
                 generated_audio_np = generated_audio[i].cpu().detach().numpy()
                 graph_spectrogram(
                     scale_data_to_range(generated_audio_np, -120, 40),
-                    f"Generated Audio {i + 1} epoch {epoch + 1}",
+                    f"Epoch {epoch + 1} Generated Audio #{i + 1}",
                 )
 
         # Save models periodically
