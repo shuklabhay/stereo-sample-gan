@@ -1,12 +1,17 @@
-# Kick it Out: Multi-Channel Convolutional Kick Drum Generation
+# StereoSampleGAN: Lightweight Stereo Audio Sample Generation
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
 Continuation of UCLA COSMOS 2024 Research
 
+note that sample = nosies and drum instrumental things
+note somewhere that like this is less for speech generation and more for like generating synths or samples or sounds. the novel thing is it uses 2 channels to generate w/ gan. like in theory it can learn to create one phrase again and again and again but not tested bc data constraints, sample gan. genrated audio samples.
+
 ## 1. Abstract
 
 / write this
+
+Generate stereo instrumental audio (drums, snares/percs, instrument shots, etc orlike whatever i decide else to make), primarily use convolution/optmized to work on low resource situations
 
 ## 2. Introduction
 
@@ -58,6 +63,8 @@ This work uses 80% of the dataset as training data and 20% as validation with al
 
 notes abt training losses and stuff:
 
+mention that like for periodic penalty and stuff comparing real to fake instead of detemrining how periodic it is compared to like nothing should be smoother so it wont never make periodici only it was avoid sound qualities the real data does NOT have bc we dont want it to not be periodic bc model can misinterpret this kinda blanket rule so nudge it to be like the REAL data in terms of periodicity NOT like some kinda truly random noise just more closely macth real data- this is done with mostly all loss metrics THE IMPORTANT DISTINCTION TO TAKE NOTE OF FOR LOSS METRIC STUFF IS THAT THE LOSS FUNCTIONS ARE made to compare generated to real not generated to an arbitrary metric so it does that yeah
+
 explain the like loss shaping stuff in detail brfhufrhufruhfruhfrhufr
 the spectral rolloff function takes two spectrogram representation arrays, calculates which frequency bin at every frame it is where below that freqneyc bin is 85% of signal information, then return an array of all of these values
 rolloff made it worse
@@ -72,8 +79,16 @@ FEATURE MATHCING IN THE GENERATOR IS ALSO SO LIFE CHANGING AHHAHAHA IT HELPS GEN
 
 ## 5. Results and Discussion
 
-MAYBE ALSO LIKE WRITE OUT MY WHOEL PAPER AS INTRODUCING A NEW TYPE OF GAN INTRODUCING A NEW ESTABLISHED MODEL LIKE HOW THERES WAVEGAN SPECGAN INTRODUCE NEW KIND OF MODEL???
-also then look at metrics of like what wavegan does to like compute how good hte model is or whatever. idk what to do for my metrics stuff BUT DUDE THIS IS LIKE A WHOLE NEW POTENTIAL MODEL ARCHITECTURE RELEASING IT AS THAT DUDEEEEE THIS IS SO GOOD THIS IS SO GOOD THIS IS SO GOOD ASHGSAGSAGHSHASA gen a good diea.
+AUDIO TO TEST MODEL'S GENERATION CAAPABILITIES:
+
+- kick
+- snare/general perc foley stuff
+- instrument shots(?)
+- \>1sec some sound (idk what)
+
+like in theory it can learn to create one phrase again and again and again but not tested bc data constraints, sample gan. genrated audio samples. StereoSampleGAN. developing my own model architecutre thing is actually insaneeee for like resume or apps or stuff tis a super super super cool result LOL!
+
+Generate stereo instrumental audio (drums, snares/percs, instrument shots, etc- could work on vocal but like a one word thing adn not evaluated on spech generation), primarily use convolution/optmiize to work on low resource situations. moreso the whole point of it can geenretate speech but not in the tradiitonal sense of like its generating a word or phrase not text to speech or something, cant generate data of one single word of phrase to validate this but could be possible
 
 so like find more data stuff and then like run through the model see how it works and if it is still okay-ish BOOM NEW MODEL ARCHITECTURE LFGGGGG but the provlem is it only generates 0.7sec audio so like impulseGAN or something?? like some kinda GAN based audio generator for impule based sounds or like quicker sounds that can be captued in 0.7 seconds or whatever like HELLL YEAHHHH THIS IS SO OP AND IT GENERATES STERO AUDIO TOO DUDEDEEEE THATS WHAT IT SETS APART BY, IMPULSEGAN GENEATES 0.7 SEC AUDIO IN STEREO THAT DOESNT HAVE TOBE IMPULSES SO COME UP WITH A BETTER NAEM IDK BUT THIS IS WHAT IM DOING, SO I GUESS IDK IFND LIKE DATA FOR SNARES OR WHATEVER LIKE AFTYER MODEL FULLY ENTIRELY WORKS FOR KICKS TEST QUICK WITH LIKE A SNARE LIBRARY AND SOME OTHER STUFF SEE IF IT CAN EFEFCTIVFELYT MAKE THOSE AND IF SO LIKE INCLUIDE THEM HERE IN DICSUSSION DUDE THIS IS AWESEOMEEEEE LETS GOOOO this is genuniely such a cool result dude WHATTTTTTT.
 

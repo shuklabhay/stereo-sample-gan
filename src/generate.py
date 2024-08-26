@@ -1,6 +1,7 @@
 import torch
 from architecture import Generator, LATENT_DIM
-from utils.helpers import normalized_db_to_wav, get_device, graph_spectrogram
+from utils.file_helpers import get_device
+from utils.signal_helpers import normalized_db_to_wav
 
 # Initialize Generator
 device = get_device()

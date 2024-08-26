@@ -9,10 +9,10 @@ from architecture import (
     Generator,
 )
 from train import training_loop
-from utils.helpers import (
-    compiled_data_path,
+from utils.file_helpers import (
     get_device,
     load_npy_data,
+    compiled_data_path,
 )
 
 # Constants

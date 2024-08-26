@@ -5,16 +5,15 @@ import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
 import soundfile as sf
-import torch
+
+from utils.file_helpers import (
+    check_and_delete_DSStore,
+    save_freq_info,
+    compiled_data_path,
+    audio_output_dir,
+)
 
 # Constants
-audio_data_dir = "data/kick_samples"
-sinetest_data_dir = "data/sine_test"
-compiled_data_path = "data/compiled_data.npy"
-average_spectrogram_path = "data/average_spectrogram.npy"
-audio_output_dir = "model"
-model_save_dir = "model"
-
 AUDIO_SAMPLE_LENGTH = 0.7  # 700 ms
 GLOBAL_SR = 44100
 N_CHANNELS = 2  # Left, right
@@ -30,74 +29,7 @@ STFT = scipy.signal.ShortTimeFFT(
 )
 
 
-# Model Utility
-def load_npy_data(file_path):
-    return np.load(file_path, allow_pickle=True)
-
-
-def save_model(model, name, preserve_old=False):
-    # Clear previous models
-    if preserve_old is not True:
-        for filename in os.listdir(model_save_dir):
-            file_path = os.path.join(model_save_dir, filename)
-            os.remove(file_path)
-
-    # Save model
-    torch.save(
-        model.state_dict(),
-        f"{model_save_dir}/{name}.pth",
-    )
-    print(f"Model Saved")
-
-
-def get_device():
-    # if torch.cuda.is_available():
-    #     return torch.device("cuda")
-    # elif torch.backends.mps.is_available():
-    #     return torch.device("mps")
-    # else:
-    #     return torch.device("cpu")
-    return torch.device("cpu")
-
-
-# File Utility
-def check_and_delete_DSStore(current_directory):
-    DSStore_path = os.path.join(current_directory, ".DS_Store")
-    if os.path.exists(DSStore_path):
-        os.remove(DSStore_path)
-
-
-def save_freq_info(freq_info, save_path):
-    np.save(save_path, freq_info)
-
-
-# Audio Utility
-def generate_sine_impules():
-    num_impulses = 1
-    duration = AUDIO_SAMPLE_LENGTH
-    magnitude = 1
-
-    for i in range(num_impulses):
-        t = np.arange(0, duration, 1 / GLOBAL_SR)
-        freq = np.random.uniform(0, 20000) / 2
-        audio_wave = magnitude * np.sin(2 * np.pi * freq * t)
-
-        audio_signal = np.zeros(int(duration * GLOBAL_SR))
-
-        start_index = 0
-        end_index = int(start_index + len(audio_wave))
-        audio_signal[start_index:end_index] = audio_wave
-
-        save_path = os.path.join(sinetest_data_dir, f"{freq:.2f}.wav")
-        sf.write(save_path, audio_signal, GLOBAL_SR)
-
-
-def compute_average_spectrogram():
-    spectrogram_data = load_npy_data(compiled_data_path)
-    average_spectrogram = np.mean(spectrogram_data, axis=0, dtype=np.float32)
-    save_freq_info(average_spectrogram, average_spectrogram_path)
-
-
+# Processing Helpers
 def normalize_sample_length(audio_file_path):
     target_length = AUDIO_SAMPLE_LENGTH
 
@@ -133,7 +65,6 @@ def scale_data_to_range(data, new_min, new_max):
     return scaled_data
 
 
-# Graphing
 def graph_spectrogram(audio_data, sample_name, graphScale=10):
     fig = sp.make_subplots(rows=2, cols=1)
     for i in range(2):
@@ -179,7 +110,7 @@ def extract_sample_magnitudes(audio_data):
 
     sample_as_magnitudes = np.array(sample_as_magnitudes)
 
-    return sample_as_magnitudes  # (2 Channels, ? Frames, ? FreqBins)
+    return sample_as_magnitudes  # (2 Channels, x Frames, y FreqBins)
 
 
 def scale_magnitude_to_normalized_loudness(channel_magnitudes):

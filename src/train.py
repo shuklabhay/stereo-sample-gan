@@ -1,14 +1,13 @@
 import torch
 import torch.nn.functional as F
 from architecture import LATENT_DIM
-from utils.helpers import (
-    graph_spectrogram,
+from utils.file_helpers import (
     save_model,
-    scale_data_to_range,
 )
+from utils.signal_helpers import graph_spectrogram, scale_data_to_range
 
 # Constants
-N_EPOCHS = 2
+N_EPOCHS = 4
 VALIDATION_INTERVAL = int(N_EPOCHS / N_EPOCHS)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
@@ -35,27 +34,6 @@ def calculate_feature_match_diff(discriminator, real_audio_data, fake_audio_data
     return loss / len(real_features)
 
 
-def calculate_spectral_centroid_diff(real_audio_data, fake_audio_data):
-    batch_size, channels, frames, freq_bins = real_audio_data.shape
-
-    freq_indices = torch.arange(1, freq_bins + 1, device=real_audio_data.device).float()
-
-    def spectral_centroid(audio_data):
-        audio_data = audio_data.sum(dim=1)
-
-        numerator = torch.sum(freq_indices.unsqueeze(0) * audio_data, dim=-1)
-        denominator = torch.sum(audio_data, dim=-1) + 1e-8
-        return numerator / denominator / freq_bins
-
-    real_centroids = spectral_centroid(real_audio_data)
-    fake_centroids = spectral_centroid(fake_audio_data)
-
-    centroid_diff = torch.abs(real_centroids - fake_centroids)
-
-    mean_diff = torch.mean(centroid_diff, dim=-1)
-    return torch.mean(mean_diff)
-
-
 def compute_generator_loss(
     criterion,
     discriminator,
@@ -70,15 +48,11 @@ def compute_generator_loss(
     feat_match = 0.45 * calculate_feature_match_diff(
         discriminator, real_audio_data, fake_audio_data
     )  # up this weight+train longer but RLLY RLLY GOOD METRIC FOR SHAPE+TONE VARIATION
-    spectral_centroid = 0.2 * calculate_spectral_centroid_diff(
-        real_audio_data, fake_audio_data
-    )
 
     g_loss = (
         # Force vertical
         g_adv_loss
         + feat_match  # compare features at layers
-        + spectral_centroid  # compare audio "center of mass path"
     )
     return g_loss
 
@@ -95,6 +69,21 @@ def calculate_spectral_convergence_diff(real_audio_data, fake_audio_data):
     denominator = torch.norm(real_audio_data, p=2) + 1e-8
 
     return numerator / denominator
+
+
+def calculate_rel_smoothness_diff(real_spectrograms, generated_spectrograms):
+    def smoothness(spectrogram):
+        time_diff = torch.diff(spectrogram, dim=2)
+        freq_diff = torch.diff(spectrogram, dim=3)
+
+        smoothness = torch.mean(torch.abs(time_diff)) + torch.mean(torch.abs(freq_diff))
+        return smoothness
+
+    real_smoothness = smoothness(real_spectrograms)
+    gen_smoothness = smoothness(generated_spectrograms)
+
+    penalty = F.relu(gen_smoothness - real_smoothness)
+    return penalty  ## move this to generator if not doing enough
 
 
 def compute_discrim_loss(
@@ -115,12 +104,16 @@ def compute_discrim_loss(
     spectral_convergence = 0.2 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
     )
+    rel_smoothness = 0.2 * calculate_rel_smoothness_diff(
+        real_audio_data, fake_audio_data
+    )  ## move this to generator if not doing enough
 
     d_loss = (
         # Force vertical
         d_adv_loss
         + spectral_diff  # compare differences
         + spectral_convergence  # compare shape similarities
+        + rel_smoothness
     )
     return d_loss
 

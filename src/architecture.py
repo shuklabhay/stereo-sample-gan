@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils.helpers import N_CHANNELS, N_FRAMES, N_FREQ_BINS
+from utils.signal_helpers import N_CHANNELS, N_FRAMES, N_FREQ_BINS
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
 
@@ -101,7 +101,7 @@ class Discriminator(nn.Module):
         )
 
     def extract_features(self, x):
-        feature_indices = [3, 9]  # Conv block index
+        feature_indices = [1, 3, 9]  # Conv block index
         features = []
         for i, layer in enumerate(self.conv_blocks):
             x = layer(x)
