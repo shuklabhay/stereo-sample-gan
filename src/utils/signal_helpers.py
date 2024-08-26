@@ -6,7 +6,7 @@ import plotly.subplots as sp
 import scipy
 import soundfile as sf
 
-from .file_helpers import (
+from file_helpers import (
     check_and_delete_DSStore,
     save_freq_info,
     compiled_data_path,
@@ -23,7 +23,7 @@ N_FREQ_BINS = 257
 # Initialize STFT Object
 GLOBAL_WIN = 2**9
 GLOBAL_HOP = 2**7
-win = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=14)
+win = scipy.signal.windows.hann(GLOBAL_WIN)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
 )
@@ -88,9 +88,10 @@ def normalize_sample_length(audio_file_path):
 def loudness_thresh(data):
     hearable_audio_thresh = -90
     floor = -120
+    # data[data < hearable_audio_thresh] = floor
 
-    data[data < hearable_audio_thresh] = floor
-    return data
+    mask = 1 / (1 + np.exp(-(data - hearable_audio_thresh)))
+    return data * mask + floor * (1 - mask)
 
 
 def scale_data_to_range(data, new_min, new_max):
@@ -176,9 +177,28 @@ def scale_normalized_loudness_to_magnitudes(normalized_loudness):
     return channel_magnitudes
 
 
-def istft_with_griffin_lim_reconstruction(
-    magnitudes,
-):
+def istft_with_consistentcy_and_rtisi(magnitudes):
+    iterations = 10
+
+    angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
+    stft = magnitudes * angles
+
+    for _ in range(iterations):
+        y = STFT.istft(stft)
+
+        stft_new = STFT.stft(y)
+        angles_new = np.exp(1j * np.angle(stft_new))
+
+        new_magnitudes = np.abs(stft_new)
+        consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes)
+        stft = consistent_magnitudes * angles_new
+
+    y = STFT.istft(stft)
+
+    return y
+
+
+def istft_with_griffin_lim_reconstruction(magnitudes):
     iterations = 100
     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
 
@@ -187,9 +207,9 @@ def istft_with_griffin_lim_reconstruction(
         istft = STFT.istft(full.T)
         stft = STFT.stft(istft)
 
-        if stft.shape[1] != N_FRAMES:  # preserve shape
-            stft = stft[:, :N_FRAMES]
+        if stft.shape[1] != magnitudes.shape[0]:
+            stft = stft[:, : magnitudes.shape[0]]
 
-        new_angles = np.exp(1j * np.angle(stft.T))
-        angles = new_angles * (i / (i + 1)) + angles * (1 / (i + 1))
+        angles = np.exp(1j * np.angle(stft.T))
+
     return STFT.istft((magnitudes * angles).T)
