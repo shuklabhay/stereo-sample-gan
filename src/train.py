@@ -35,23 +35,25 @@ def calculate_feature_match_diff(discriminator, real_audio_data, fake_audio_data
     return loss / len(real_features)
 
 
-def calculate_spectral_rolloff_diff(real_spectrograms, fake_spectrograms):
-    rolloff_thresh = 0.85
-    total_energy_real = torch.sum(real_spectrograms, dim=3)
-    total_energy_fake = torch.sum(fake_spectrograms, dim=3)
+def calculate_spectral_centroid_diff(real_audio_data, fake_audio_data):
+    batch_size, channels, frames, freq_bins = real_audio_data.shape
 
-    real_rolloff = torch.searchsorted(
-        torch.cumsum(real_spectrograms, dim=3),
-        (total_energy_real * rolloff_thresh).unsqueeze(3),
-        right=True,
-    ).float()
-    fake_rolloff = torch.searchsorted(
-        torch.cumsum(fake_spectrograms, dim=3),
-        (total_energy_fake * rolloff_thresh).unsqueeze(3),
-        right=True,
-    ).float()
+    freq_indices = torch.arange(1, freq_bins + 1, device=real_audio_data.device).float()
 
-    return torch.mean(torch.abs(real_rolloff - fake_rolloff))
+    def spectral_centroid(audio_data):
+        audio_data = audio_data.sum(dim=1)
+
+        numerator = torch.sum(freq_indices.unsqueeze(0) * audio_data, dim=-1)
+        denominator = torch.sum(audio_data, dim=-1) + 1e-8
+        return numerator / denominator / freq_bins
+
+    real_centroids = spectral_centroid(real_audio_data)
+    fake_centroids = spectral_centroid(fake_audio_data)
+
+    centroid_diff = torch.abs(real_centroids - fake_centroids)
+
+    mean_diff = torch.mean(centroid_diff, dim=-1)
+    return torch.mean(mean_diff)
 
 
 def compute_generator_loss(
@@ -68,16 +70,15 @@ def compute_generator_loss(
     feat_match = 0.45 * calculate_feature_match_diff(
         discriminator, real_audio_data, fake_audio_data
     )  # up this weight+train longer but RLLY RLLY GOOD METRIC FOR SHAPE+TONE VARIATION
-    spectral_rolloff = 0.001 * calculate_spectral_rolloff_diff(
+    spectral_centroid = 0.2 * calculate_spectral_centroid_diff(
         real_audio_data, fake_audio_data
-    )  # empircally reduces model performance
+    )
 
     g_loss = (
         # Force vertical
         g_adv_loss
         + feat_match  # compare features at layers
-        # + spectral_rolloff  # compare audio concentration thresh points
-        # + spectral_centroid # compare audio spread centers
+        + spectral_centroid  # compare audio "center of mass path"
     )
     return g_loss
 
@@ -90,9 +91,10 @@ def calculate_spectral_diff(real_audio_data, fake_audio_data):
 
 
 def calculate_spectral_convergence_diff(real_audio_data, fake_audio_data):
-    return torch.norm(fake_audio_data - real_audio_data, p=2) / (
-        torch.norm(real_audio_data, p=2) + 1e-8
-    )
+    numerator = torch.norm(fake_audio_data - real_audio_data, p=2)
+    denominator = torch.norm(real_audio_data, p=2) + 1e-8
+
+    return numerator / denominator
 
 
 def compute_discrim_loss(
@@ -112,13 +114,13 @@ def compute_discrim_loss(
     spectral_diff = 0.3 * calculate_spectral_diff(real_audio_data, fake_audio_data)
     spectral_convergence = 0.2 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
-    )  ## maybe increase both of these weights
+    )
 
     d_loss = (
         # Force vertical
         d_adv_loss
         + spectral_diff  # compare differences
-        + spectral_convergence  # compare total shape similarities
+        + spectral_convergence  # compare shape similarities
     )
     return d_loss
 
