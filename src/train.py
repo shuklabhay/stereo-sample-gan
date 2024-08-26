@@ -7,8 +7,8 @@ from utils.file_helpers import (
 from utils.signal_helpers import graph_spectrogram, scale_data_to_range
 
 # Constants
-N_EPOCHS = 4
-VALIDATION_INTERVAL = int(N_EPOCHS / N_EPOCHS)
+N_EPOCHS = 6
+VALIDATION_INTERVAL = 2  # int(N_EPOCHS / 3)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 

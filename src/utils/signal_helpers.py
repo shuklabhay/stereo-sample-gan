@@ -6,7 +6,7 @@ import plotly.subplots as sp
 import scipy
 import soundfile as sf
 
-from utils.file_helpers import (
+from .file_helpers import (
     check_and_delete_DSStore,
     save_freq_info,
     compiled_data_path,
@@ -27,6 +27,43 @@ win = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=14)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
 )
+
+
+# Encode/Decode Full Wrappers
+def encode_sample_directory(sample_dir, silent=True):
+    check_and_delete_DSStore(sample_dir)
+
+    real_data = []
+    # Encode samples
+    for root, _, all_samples in os.walk(sample_dir):
+        for sample_name in all_samples:
+            sample_path = os.path.join(root, sample_name)
+
+            loudness_data = encode_sample(sample_path)
+            real_data.append(loudness_data)
+
+            if silent is not True and np.random.rand() < 0.005:
+                graph_spectrogram(loudness_data, sample_name)
+
+    save_freq_info(real_data, compiled_data_path)
+
+
+def normalized_loudness_to_audio(loudness_data, file_name):
+    audio_channel_loudness_info = []
+    audio_reconstruction = []
+
+    for channel_loudness in loudness_data:
+        channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
+        audio_channel_loudness_info.append(channel_db_loudnes)
+
+        channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
+        audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
+
+        audio_reconstruction.append(audio_signal)
+    audio_stereo = np.vstack(audio_reconstruction)
+
+    output_path = os.path.join(audio_output_dir, f"{file_name}.wav")
+    sf.write(output_path, audio_stereo.T, GLOBAL_SR)
 
 
 # Processing Helpers
@@ -129,24 +166,6 @@ def encode_sample(sample_path):
     return loudness_data
 
 
-def encode_sample_directory(sample_dir, silent=True):
-    check_and_delete_DSStore(sample_dir)
-
-    real_data = []
-    # Encode samples
-    for root, _, all_samples in os.walk(sample_dir):
-        for sample_name in all_samples:
-            sample_path = os.path.join(root, sample_name)
-
-            loudness_data = encode_sample(sample_path)
-            real_data.append(loudness_data)
-
-            if silent is not True and np.random.rand() < 0.005:
-                graph_spectrogram(loudness_data, sample_name)
-
-    save_freq_info(real_data, compiled_data_path)
-
-
 # Decoding audio
 def scale_normalized_loudness_to_magnitudes(normalized_loudness):
     loudness_data = scale_data_to_range(normalized_loudness, -120, 40)
@@ -157,13 +176,11 @@ def scale_normalized_loudness_to_magnitudes(normalized_loudness):
     return channel_magnitudes
 
 
-def istft_with_griffin_lim_reconstruction(magnitudes, preserve_signal_angles=False):
+def istft_with_griffin_lim_reconstruction(
+    magnitudes,
+):
     iterations = 100
-
-    if preserve_signal_angles == True:
-        angles = np.exp(1j * np.angle(magnitudes))
-    else:
-        angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
+    angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
 
     for i in range(iterations):
         full = magnitudes * angles
@@ -176,23 +193,3 @@ def istft_with_griffin_lim_reconstruction(magnitudes, preserve_signal_angles=Fal
         new_angles = np.exp(1j * np.angle(stft.T))
         angles = new_angles * (i / (i + 1)) + angles * (1 / (i + 1))
     return STFT.istft((magnitudes * angles).T)
-
-
-def normalized_db_to_wav(loudness_data, name):
-    audio_channel_loudness_info = []
-    audio_reconstruction = []
-
-    for channel_loudness in loudness_data:
-        channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
-        audio_channel_loudness_info.append(channel_db_loudnes)
-
-        channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
-        audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
-
-        audio_reconstruction.append(audio_signal)
-
-    graph_spectrogram(audio_channel_loudness_info, "Generated Audio Loudness (db)", 10)
-    audio_stereo = np.vstack(audio_reconstruction)
-
-    output_path = os.path.join(audio_output_dir, f"{name}.wav")
-    sf.write(output_path, audio_stereo.T, GLOBAL_SR)

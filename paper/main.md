@@ -7,6 +7,8 @@ Continuation of UCLA COSMOS 2024 Research
 note that sample = nosies and drum instrumental things
 note somewhere that like this is less for speech generation and more for like generating synths or samples or sounds. the novel thing is it uses 2 channels to generate w/ gan. like in theory it can learn to create one phrase again and again and again but not tested bc data constraints, sample gan. genrated audio samples.
 
+go through and like rewrite everything make sure its all accurate and also like making sure whats important is all the things about the specific project like the new criteria of what this proejct is and whatever
+
 ## 1. Abstract
 
 / write this
@@ -39,9 +41,9 @@ A kick drum's "defining" characteristics include:
 
 ### 3.2. Feature Extraction/Encoding
 
-Convolution by nature can not learn about the time-series component of audio data, thus this feature extraction process must flatten all the audio into a static form of data. This is achieved by representing audio as amplitudes the time-frequency domain, similar to a spectrogram representation of audio. Each sample is first converted into a two channel array using a standard 44100 hz sampling rate. Then the audio sample is normalized to a length of 700 miliseconds and passed into a Short-time Fourier Transform (STFT). The STFT uses a kaiser window with a beta value of 14, a window size of of 512, and a hope size of 128. These parameters were determined to be the most effective through a signal reconstruction test (see STFT and iSTFT validation) and also limited by hardware contraints. The data tensor's final shape is 2 channels by 245 frames by 257 frequency bins. This information can be compared to that of a spectrogram.
+Convolution by nature can not learn about the time-series component of audio data, thus this feature extraction process must flatten all the audio into a static form of data. This is achieved by representing audio with their magnitudes the time-frequency domain, similar to a spectrogram representation of audio. Each sample is first converted into a two channel array using a standard 44100 hz sampling rate. Then the audio sample is normalized to a length of 700 miliseconds and passed into a Short-time Fourier Transform (STFT). The STFT uses a kaiser window with a beta value of 14, a window size of of 512, and a hope size of 128. These parameters were determined to be the most effective through a signal reconstruction test (see STFT and iSTFT validation) and also limited by hardware contraints. The phase information of each frequency is then discarded and the data tensor's final shape is 2 channels by 245 frames by 257 frequency bins. This representation of information can be compared to that of a spectrogram.
 
-While amplitude data (the output of the STFT) is important, this data is by nature skewed towards lower frequencies which contain higher intensities. To equalize the representation of frequencies in data the tensor of amplitude data is normalized to be in the range of 0 to 100 and then scaled into the logarithmic, decibal scale, which represents audio information as loudness, a more uniform scale relative to the entire frequency spectrum. The 0-100 scaling is to ensure consistent loudness information. A loudness threshold then sets all signals less than -90 decibals (auditory cutoff for the human ear) to be the minimum decibal value (a constant of -120) this data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
+While magnitude data (the output of the STFT) is important, this data is by nature skewed towards lower frequencies which contain higher intensities. To equalize the representation of frequencies in data the tensor of magnitude data is normalized to be in the range of 0 to 100 and then scaled into the logarithmic, decibal scale, which represents audio information as loudness, a more uniform scale relative to the entire frequency spectrum. The 0-100 scaling is to ensure consistent loudness information. A loudness threshold then sets all signals less than -90 decibals (auditory cutoff for the human ear) to be the minimum decibal value (a constant of -120) this data is then finally scaled to be between -1 and 1, representative of the output the model creates using the hyperbolic tangent activation function.
 
 <img alt= 'Data processing comparison' src="static/magnitudes_vs_loudness.png" width=1000>
 <p><b>Fig 2:</b> <i>STFT audio information before and after feature extraction.</i></p>
@@ -103,6 +105,8 @@ show learned kernels mayube??
 oh drums do this, synths do this, snares do this, >1s audio does this, etc
 
 ### 5.3. STFT and iSTFT Validation
+
+talk about audio processing valudation file stuff
 
 explain signal reconstruction test + findings
 

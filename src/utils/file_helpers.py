@@ -4,7 +4,6 @@ import torch
 
 # Constants
 audio_data_dir = "data/kick_samples"
-sinetest_data_dir = "data/sine_test"
 compiled_data_path = "data/compiled_data.npy"
 average_spectrogram_path = "data/average_spectrogram.npy"
 audio_output_dir = "model"
