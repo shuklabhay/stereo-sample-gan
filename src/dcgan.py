@@ -38,6 +38,7 @@ optimizer_G = optim.AdamW(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  
 optimizer_D = optim.AdamW(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
 
 
+# Train
 device = get_device()
 generator.to(device)
 discriminator.to(device)

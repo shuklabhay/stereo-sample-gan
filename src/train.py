@@ -8,7 +8,7 @@ from utils.signal_helpers import graph_spectrogram, scale_data_to_range
 
 # Constants
 N_EPOCHS = 6
-VALIDATION_INTERVAL = 2  # int(N_EPOCHS / 3)
+VALIDATION_INTERVAL = 1  # int(N_EPOCHS / 3)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 
@@ -34,6 +34,21 @@ def calculate_feature_match_diff(discriminator, real_audio_data, fake_audio_data
     return loss / len(real_features)
 
 
+def calculate_relative_smoothness(real_spectrograms, generated_spectrograms):
+    def smoothness(spectrogram):
+        time_diff = torch.diff(spectrogram, dim=2)
+        freq_diff = torch.diff(spectrogram, dim=3)
+        smoothness = torch.mean(torch.abs(time_diff)) + torch.mean(torch.abs(freq_diff))
+
+        return smoothness
+
+    real_smoothness = smoothness(real_spectrograms)
+    generated_smoothness = smoothness(generated_spectrograms)
+
+    penalty = F.relu(generated_smoothness - real_smoothness)
+    return penalty
+
+
 def compute_generator_loss(
     criterion,
     discriminator,
@@ -47,12 +62,16 @@ def compute_generator_loss(
     # Extra metrics
     feat_match = 0.45 * calculate_feature_match_diff(
         discriminator, real_audio_data, fake_audio_data
-    )  # up this weight+train longer but RLLY RLLY GOOD METRIC FOR SHAPE+TONE VARIATION
+    )
+    relative_smoothness = 0.2 * calculate_relative_smoothness(
+        real_audio_data, fake_audio_data
+    )
 
     g_loss = (
         # Force vertical
         g_adv_loss
         + feat_match  # compare features at layers
+        + relative_smoothness  # compare random periodic stuff
     )
     return g_loss
 
@@ -69,21 +88,6 @@ def calculate_spectral_convergence_diff(real_audio_data, fake_audio_data):
     denominator = torch.norm(real_audio_data, p=2) + 1e-8
 
     return numerator / denominator
-
-
-def calculate_rel_smoothness_diff(real_spectrograms, generated_spectrograms):
-    def smoothness(spectrogram):
-        time_diff = torch.diff(spectrogram, dim=2)
-        freq_diff = torch.diff(spectrogram, dim=3)
-
-        smoothness = torch.mean(torch.abs(time_diff)) + torch.mean(torch.abs(freq_diff))
-        return smoothness
-
-    real_smoothness = smoothness(real_spectrograms)
-    gen_smoothness = smoothness(generated_spectrograms)
-
-    penalty = F.relu(gen_smoothness - real_smoothness)
-    return penalty  ## move this to generator if not doing enough
 
 
 def compute_discrim_loss(
@@ -104,16 +108,12 @@ def compute_discrim_loss(
     spectral_convergence = 0.2 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
     )
-    rel_smoothness = 0.2 * calculate_rel_smoothness_diff(
-        real_audio_data, fake_audio_data
-    )  ## move this to generator if not doing enough
 
     d_loss = (
         # Force vertical
         d_adv_loss
         + spectral_diff  # compare differences
         + spectral_convergence  # compare shape similarities
-        + rel_smoothness
     )
     return d_loss
 
@@ -261,4 +261,4 @@ def training_loop(
 
         # Save models periodically
         if (epoch + 1) % SAVE_INTERVAL == 0:
-            save_model(generator, "DCGAN")
+            save_model(generator, "StereoSampleGAN-Kick", True)

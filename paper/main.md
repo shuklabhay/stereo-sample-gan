@@ -4,6 +4,8 @@ Abhay Shukla\
 abhayshuklavtr@gmail.com\
 Continuation of UCLA COSMOS 2024 Research
 
+## basically yeah rewrite eveyrthing with the idea of this is happening for multiple types of audio and generative network for many kinds of audio
+
 note that sample = nosies and drum instrumental things
 note somewhere that like this is less for speech generation and more for like generating synths or samples or sounds. the novel thing is it uses 2 channels to generate w/ gan. like in theory it can learn to create one phrase again and again and again but not tested bc data constraints, sample gan. genrated audio samples.
 
@@ -21,13 +23,13 @@ Audio generation is an incredibly complex and computationally expensive task, an
 
 Audio generation models commonly take advantage of time-series optimized architectures (transformers, recurrent architectures, and HMMs [ADD CITATIONS FOR THIS- MAYBE JUST STH SAYING RECURRENT USED FOR AUDIO]), but this work instead opts to use a Deep Convolutional GAN (DCGAN) Architecture[1] and analyze how effectively it can be used to capture and replicate audio's sophisticated temporal and spectral relationships using multi channel image representations.
 
-As a standard example, this model will focuses on generating a category of audio in an attempt to tailor the model towards the one type of sound and wholicsticly learn it's charactertics. Kick drums were chosen because of their simplicity and constrained amount of variance (see defining characteristics section [make it like a number section code].) Alternate audio category considerations were snare drums, full drum loops, and insrtrument impulses, but kick drums were decided to be the most optimal for this initial experiment due to their simple and relatively consistent features.
+This model aims to focus on generating a category of audio and wholicsticly learn it's charactertics.
 
 ## 3. Data Manipulation
 
 ### 3.1. Collection
 
-The training data used is a compilation of 7856 kick drum impules. This data is primarily sourced from digital production “sample packs” which contain various kick drum samples with many different characters and use cases (analog, electronic, pop, hip-hop, beatbox, heavy, punchy, etc), overall providing a diverse range of potential drum sounds to generate that for the most part include the following set of "defining" kick drum characteristics, features we will later try to reproduce where training data variety will be beneficial.
+Training data is primarily sourced from digital production “sample packs.” For kick drums, the main "case study" for this paper, the training data used is a compilation of 7856 kick drum impules with different characteristics and use cases (analog, electronic, pop, hip-hop, beatbox, heavy, punchy, etc), overall providing a diverse range of potential drum sounds to generate that. A metric to watch for model validaiton is how well the model is able to generate the following set of "defining" kick drum characteristics.
 
 A kick drum's "defining" characteristics include:
 
@@ -43,7 +45,9 @@ A kick drum's "defining" characteristics include:
 
 specifies audio shape then finds ideal hop length and frame size. Then cut data shape down to remove edge rtifact at end of sample (it egenrates slightly bigger than desired shape and includes an artifact only on those frames so thsi fixes both problems)
 
-basically like yeah rewrite/modify this with the changes that fixed the fft artifact stuff YAY
+basically like yeah rewrite/modify this with the changes that fixed the fft artifact stuff YAY. fixing the vertical artifact thing is bigbrainnn
+
+talk about istft time-freq mask, also how non stero data is duplicated then to be made stereo
 
 Convolution by nature can not learn about the time-series component of audio data, thus this feature extraction process must flatten all the audio into a static form of data. This is achieved by representing audio with their magnitudes the time-frequency domain, similar to a spectrogram representation of audio. Each sample is first converted into a two channel array using a standard 44100 hz sampling rate. Then the audio sample is normalized to a length of 700 miliseconds and passed into a Short-time Fourier Transform (STFT). The STFT uses a kaiser window with a beta value of 14, a window size of of 512, and a hope size of 128. These parameters were determined to be the most effective through a signal reconstruction test (see STFT and iSTFT validation) and also limited by hardware contraints. The phase information of each frequency is then discarded and the data tensor's final shape is 2 channels by 245 frames by 257 frequency bins. This representation of information can be compared to that of a spectrogram.
 

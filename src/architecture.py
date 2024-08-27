@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils.signal_helpers import N_CHANNELS, N_FRAMES, N_FREQ_BINS
+from utils.signal_helpers import N_CHANNELS
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
 

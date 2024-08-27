@@ -6,12 +6,13 @@ import plotly.subplots as sp
 import scipy
 import soundfile as sf
 
-from file_helpers import (
-    check_and_delete_DSStore,
-    save_freq_info,
-    compiled_data_path,
+from utils.file_helpers import (
+    save_loudness_information,
+    delete_DSStore,
     audio_output_dir,
+    compiled_data_path,
 )
+
 
 # Constants
 AUDIO_SAMPLE_LENGTH = 0.7  # 700 ms
@@ -20,7 +21,7 @@ N_CHANNELS = 2  # Left, right
 N_FRAMES = 256
 N_FREQ_BINS = 256
 
-# Initialize STFT Object
+# STFT Helpers
 GLOBAL_WIN = (N_FREQ_BINS - 1) * 2
 GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (N_FRAMES - 1)
 
@@ -30,7 +31,17 @@ STFT = scipy.signal.ShortTimeFFT(
 )
 
 
-# Processing Helpers
+def clean_stft(channel):
+    stft = STFT.stft(channel)
+    magnitudes = np.abs(stft).T
+
+    if magnitudes.shape[0] != N_FRAMES:
+        magnitudes = magnitudes[:N_FRAMES, :]
+
+    return magnitudes
+
+
+# Processing
 def normalize_sample_length(audio_file_path):
     target_length = AUDIO_SAMPLE_LENGTH
 
@@ -64,17 +75,6 @@ def scale_data_to_range(data, new_min, new_max):
     scaled_data = np.round(scaled_data, decimals=6)
 
     return scaled_data
-
-
-def clean_stft(channel):
-    stft = STFT.stft(channel)
-    magnitudes = np.abs(stft).T
-
-    # Remove stft vertical artifact
-    if magnitudes.shape[0] != N_FRAMES:
-        magnitudes = magnitudes[:N_FRAMES, :]
-
-    return magnitudes
 
 
 def graph_spectrogram(audio_data, sample_name, graphScale=10):
@@ -111,7 +111,7 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
 
 # Encoding audio
 def encode_sample_directory(sample_dir, visualize=True):
-    check_and_delete_DSStore(sample_dir)
+    delete_DSStore(sample_dir)
 
     real_data = []
     # Encode samples
@@ -119,13 +119,20 @@ def encode_sample_directory(sample_dir, visualize=True):
         for sample_name in all_samples:
             sample_path = os.path.join(root, sample_name)
 
-            loudness_data = encode_sample(sample_path)
+            loudness_data = audio_to_normalized_loudness(sample_path)
             real_data.append(loudness_data)
 
             if visualize is True and np.random.rand() < 0.005:
                 graph_spectrogram(loudness_data, sample_name)
 
-    save_freq_info(real_data, compiled_data_path)
+    save_loudness_information(real_data, compiled_data_path)
+
+
+def audio_to_normalized_loudness(sample_path):
+    normalized_y = normalize_sample_length(sample_path)
+    magnitudes = extract_sample_magnitudes(normalized_y)
+    loudness_data = scale_magnitude_to_normalized_loudness(magnitudes)
+    return loudness_data
 
 
 def extract_sample_magnitudes(audio_data):
@@ -152,13 +159,6 @@ def scale_magnitude_to_normalized_loudness(channel_magnitudes):
     return normalized_loudness
 
 
-def encode_sample(sample_path):
-    normalized_y = normalize_sample_length(sample_path)
-    magnitudes = extract_sample_magnitudes(normalized_y)
-    loudness_data = scale_magnitude_to_normalized_loudness(magnitudes)
-    return loudness_data
-
-
 # Decoding audio
 def normalized_loudness_to_audio(loudness_data, file_name):
     audio_channel_loudness_info = []
@@ -169,7 +169,7 @@ def normalized_loudness_to_audio(loudness_data, file_name):
         audio_channel_loudness_info.append(channel_db_loudnes)
 
         channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
-        audio_signal = griffin_lim_istft_with_time_frequency_masking(channel_magnitudes)
+        audio_signal = griffin_lim_istft_with_time_freq_masking(channel_magnitudes)
 
         audio_reconstruction.append(audio_signal)
     audio_stereo = np.vstack(audio_reconstruction)
@@ -187,24 +187,8 @@ def scale_normalized_loudness_to_magnitudes(normalized_loudness):
     return channel_magnitudes
 
 
-def istft_with_rtisi(magnitudes):
-    iterations = 40
-    angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
-    stft = magnitudes * angles
-
-    for _ in range(iterations):
-        y = STFT.istft(stft.T)
-        stft_new = clean_stft(y)
-
-        angles_new = np.exp(1j * np.angle(stft_new))
-
-        stft = magnitudes * angles_new
-
-    return STFT.istft(stft.T)
-
-
-def griffin_lim_istft_with_time_frequency_masking(magnitudes):
-    iterations = 20
+def griffin_lim_istft_with_time_freq_masking(magnitudes):
+    iterations = 25
     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
     stft = magnitudes * angles
     mask = (magnitudes > np.mean(magnitudes)) * 1.0

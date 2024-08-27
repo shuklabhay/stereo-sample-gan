@@ -3,7 +3,7 @@ import random
 from file_helpers import audio_data_dir
 from signal_helpers import (
     normalized_loudness_to_audio,
-    encode_sample,
+    audio_to_normalized_loudness,
     graph_spectrogram,
     scale_normalized_loudness_to_magnitudes,
 )
@@ -25,7 +25,7 @@ def choose_random_sample():
 
 # Analyze fourier transform audio degradation
 sample_path, sample_name = choose_random_sample()
-normalized_loudness = encode_sample(sample_path)
+normalized_loudness = audio_to_normalized_loudness(sample_path)
 graph_spectrogram(normalized_loudness, f"{sample_name} Original")
 
 print("Shape after processing ", normalized_loudness.shape)
@@ -35,7 +35,7 @@ normalized_loudness_to_audio(magnitudes, "test")
 
 # Visualize processed sample
 saved = "model/test.wav"
-normalized_loudness2 = encode_sample(saved)
+normalized_loudness2 = audio_to_normalized_loudness(saved)
 graph_spectrogram(
     normalized_loudness2,
     f"{sample_name} After iSTFT",

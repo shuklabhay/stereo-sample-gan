@@ -37,14 +37,14 @@ def get_device():
     #     return torch.device("mps")
     # else:
     #     return torch.device("cpu")
-    return torch.device("cpu")
+    return torch.device("cpu")  # personal hardware limitations
 
 
-def check_and_delete_DSStore(current_directory):
+def delete_DSStore(current_directory):
     DSStore_path = os.path.join(current_directory, ".DS_Store")
     if os.path.exists(DSStore_path):
         os.remove(DSStore_path)
 
 
-def save_freq_info(freq_info, save_path):
-    np.save(save_path, freq_info)
+def save_loudness_information(loudness_information, save_path):
+    np.save(save_path, loudness_information)
