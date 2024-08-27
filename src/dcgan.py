@@ -9,23 +9,23 @@ from architecture import (
     Generator,
 )
 from train import training_loop
-from utils.helpers import (
-    compiled_data_path,
+from utils.file_helpers import (
     get_device,
     load_npy_data,
+    compiled_data_path,
 )
 
 # Constants
-LR_G = 0.002
-LR_D = 0.001
+LR_G = 0.004
+LR_D = 0.004
 
 # Load data
-spectrogram_bank = load_npy_data(compiled_data_path)
-spectrogram_bank = torch.FloatTensor(spectrogram_bank)
-train_size = int(0.8 * len(spectrogram_bank))
-val_size = len(spectrogram_bank) - train_size
+all_spectrograms = load_npy_data(compiled_data_path)
+all_spectrograms = torch.FloatTensor(all_spectrograms)
+train_size = int(0.8 * len(all_spectrograms))
+val_size = len(all_spectrograms) - train_size
 train_dataset, val_dataset = random_split(
-    TensorDataset(spectrogram_bank), [train_size, val_size]
+    TensorDataset(all_spectrograms), [train_size, val_size]
 )
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -33,10 +33,12 @@ val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 # Initialize models and optimizers
 generator = Generator()
 discriminator = Discriminator()
-criterion = nn.BCEWithLogitsLoss()
-optimizer_G = optim.Adam(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  # type: ignore
-optimizer_D = optim.Adam(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
+criterion = nn.MSELoss()
+optimizer_G = optim.AdamW(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  # type: ignore
+optimizer_D = optim.AdamW(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
 
+
+# Train
 device = get_device()
 generator.to(device)
 discriminator.to(device)
@@ -50,6 +52,5 @@ training_loop(
     criterion,
     optimizer_G,
     optimizer_D,
-    spectrogram_bank,
     device,
 )
