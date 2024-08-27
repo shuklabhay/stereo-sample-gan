@@ -17,8 +17,8 @@ from file_helpers import (
 AUDIO_SAMPLE_LENGTH = 0.7  # 700 ms
 GLOBAL_SR = 44100
 N_CHANNELS = 2  # Left, right
-N_FRAMES = 245
-N_FREQ_BINS = 257
+N_FRAMES = 256
+N_FREQ_BINS = 256
 
 # Initialize STFT Object
 GLOBAL_WIN = 2**9
@@ -57,7 +57,8 @@ def normalized_loudness_to_audio(loudness_data, file_name):
         audio_channel_loudness_info.append(channel_db_loudnes)
 
         channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
-        audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
+        # audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
+        audio_signal = istft_with_rtisi(channel_magnitudes)
 
         audio_reconstruction.append(audio_signal)
     audio_stereo = np.vstack(audio_reconstruction)
@@ -86,12 +87,14 @@ def normalize_sample_length(audio_file_path):
 
 
 def loudness_thresh(data):
-    hearable_audio_thresh = -90
+    hearable_audio_thresh = -100
     floor = -120
-    # data[data < hearable_audio_thresh] = floor
+    data[data < hearable_audio_thresh] = floor
 
-    mask = 1 / (1 + np.exp(-(data - hearable_audio_thresh)))
-    return data * mask + floor * (1 - mask)
+    # mask = 1 / (1 + np.exp(-(data - hearable_audio_thresh)))
+    # data = data * mask + floor * (1 - mask)
+
+    return data
 
 
 def scale_data_to_range(data, new_min, new_max):
@@ -136,13 +139,34 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
 
 
 # Encoding audio
+# def extract_sample_magnitudes(audio_data):
+#     sample_as_magnitudes = []
+
+#     for channel in audio_data:
+#         channel_mean = np.mean(channel)
+#         channel -= channel_mean
+#         stft = STFT.stft(channel)
+#         magnitudes = np.abs(stft).T
+#         sample_as_magnitudes.append(magnitudes)
+
+#     sample_as_magnitudes = np.array(sample_as_magnitudes)
+
+#     return sample_as_magnitudes  # (2 Channels, x Frames, y FreqBins)
+
+
 def extract_sample_magnitudes(audio_data):
     sample_as_magnitudes = []
 
     for channel in audio_data:
         channel_mean = np.mean(channel)
         channel -= channel_mean
-        stft = STFT.stft(channel)
+        _, _, stft = scipy.signal.stft(
+            channel,
+            fs=GLOBAL_SR,
+            window=win,
+            nperseg=GLOBAL_WIN,
+            noverlap=GLOBAL_WIN - GLOBAL_HOP,
+        )
         magnitudes = np.abs(stft).T
         sample_as_magnitudes.append(magnitudes)
 
@@ -177,29 +201,71 @@ def scale_normalized_loudness_to_magnitudes(normalized_loudness):
     return channel_magnitudes
 
 
-def istft_with_consistentcy_and_rtisi(magnitudes):
+def istft_with_rtisi(magnitudes):
     iterations = 10
 
     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
     stft = magnitudes * angles
 
     for _ in range(iterations):
-        y = STFT.istft(stft)
+        _, y = scipy.signal.istft(
+            stft.T,
+            fs=GLOBAL_SR,
+            window=win,
+            nperseg=GLOBAL_WIN,
+            noverlap=GLOBAL_WIN - GLOBAL_HOP,
+        )
+        _, _, stft_new = scipy.signal.stft(
+            y,
+            fs=GLOBAL_SR,
+            window=win,
+            nperseg=GLOBAL_WIN,
+            noverlap=GLOBAL_WIN - GLOBAL_HOP,
+        )
 
-        stft_new = STFT.stft(y)
         angles_new = np.exp(1j * np.angle(stft_new))
-
         new_magnitudes = np.abs(stft_new)
-        consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes)
-        stft = consistent_magnitudes * angles_new
 
-    y = STFT.istft(stft)
+        consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes.T)
+        stft = consistent_magnitudes * angles_new.T
 
-    return y
+    _, audio_signal = scipy.signal.istft(
+        stft.T,
+        fs=GLOBAL_SR,
+        window=win,
+        nperseg=GLOBAL_WIN,
+        noverlap=GLOBAL_WIN - GLOBAL_HOP,
+    )
+    return audio_signal
+
+
+# def istft_with_rtisi(magnitudes):
+#     iterations = 10
+
+#     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
+#     stft = magnitudes * angles
+#     frames, fbins = stft.shape
+
+#     for _ in range(iterations):
+#         y = STFT.istft(stft.T)
+#         stft_new = STFT.stft(y)
+#         stft_new = stft_new.T
+
+#         if stft.shape[0] != stft_new.shape[0]:
+#             stft_new = stft_new[:frames, :fbins]
+
+#         angles_new = np.exp(1j * np.angle(stft_new))
+
+#         new_magnitudes = np.abs(stft_new)
+
+#         consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes)
+#         stft = consistent_magnitudes * angles_new
+
+#     return STFT.istft(stft.T)
 
 
 def istft_with_griffin_lim_reconstruction(magnitudes):
-    iterations = 100
+    iterations = 5
     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
 
     for i in range(iterations):

@@ -26,7 +26,7 @@ def choose_random_sample():
 # Analyze fourier transform audio degradation
 sample_path, sample_name = choose_random_sample()
 normalized_loudness = encode_sample(sample_path)
-graph_spectrogram(normalized_loudness, f"{sample_name} Original as normalized_db")
+graph_spectrogram(normalized_loudness, f"{sample_name} Original")
 
 magnitudes = scale_normalized_loudness_to_magnitudes(normalized_loudness)
 normalized_loudness_to_audio(magnitudes, "test")
@@ -36,5 +36,5 @@ saved = "model/test.wav"
 normalized_loudness2 = encode_sample(saved)
 graph_spectrogram(
     normalized_loudness2,
-    f"{sample_name} After iSTFT as normalized_db (additional stft applied to visualize)",
+    f"{sample_name} After iSTFT",
 )
