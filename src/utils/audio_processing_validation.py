@@ -28,6 +28,8 @@ sample_path, sample_name = choose_random_sample()
 normalized_loudness = encode_sample(sample_path)
 graph_spectrogram(normalized_loudness, f"{sample_name} Original")
 
+print("Shape after processing ", normalized_loudness.shape)
+
 magnitudes = scale_normalized_loudness_to_magnitudes(normalized_loudness)
 normalized_loudness_to_audio(magnitudes, "test")
 

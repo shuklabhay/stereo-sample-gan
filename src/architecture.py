@@ -61,9 +61,6 @@ class Generator(nn.Module):
             nn.ReLU(),  # Shape: (BATCH_SIZE, 8, 128, 128)
             nn.ConvTranspose2d(8, N_CHANNELS, kernel_size=6, stride=2, padding=2),
             # Shape: (BATCH_SIZE, N_CHANNELS, 256, 256)
-            nn.Upsample(
-                size=(N_FRAMES, N_FREQ_BINS), mode="bilinear", align_corners=False
-            ),
             nn.Tanh(),
         )
 
@@ -76,7 +73,6 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         self.conv_blocks = nn.Sequential(
-            nn.Upsample(size=(256, 256), mode="bilinear", align_corners=False),
             spectral_norm(nn.Conv2d(N_CHANNELS, 4, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             spectral_norm(nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1)),

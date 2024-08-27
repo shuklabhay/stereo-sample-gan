@@ -21,50 +21,12 @@ N_FRAMES = 256
 N_FREQ_BINS = 256
 
 # Initialize STFT Object
-GLOBAL_WIN = 2**9
-GLOBAL_HOP = 2**7
+GLOBAL_WIN = (N_FREQ_BINS - 1) * 2
+GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (N_FRAMES - 1)
 win = scipy.signal.windows.hann(GLOBAL_WIN)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
 )
-
-
-# Encode/Decode Full Wrappers
-def encode_sample_directory(sample_dir, silent=True):
-    check_and_delete_DSStore(sample_dir)
-
-    real_data = []
-    # Encode samples
-    for root, _, all_samples in os.walk(sample_dir):
-        for sample_name in all_samples:
-            sample_path = os.path.join(root, sample_name)
-
-            loudness_data = encode_sample(sample_path)
-            real_data.append(loudness_data)
-
-            if silent is not True and np.random.rand() < 0.005:
-                graph_spectrogram(loudness_data, sample_name)
-
-    save_freq_info(real_data, compiled_data_path)
-
-
-def normalized_loudness_to_audio(loudness_data, file_name):
-    audio_channel_loudness_info = []
-    audio_reconstruction = []
-
-    for channel_loudness in loudness_data:
-        channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
-        audio_channel_loudness_info.append(channel_db_loudnes)
-
-        channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
-        # audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
-        audio_signal = istft_with_rtisi(channel_magnitudes)
-
-        audio_reconstruction.append(audio_signal)
-    audio_stereo = np.vstack(audio_reconstruction)
-
-    output_path = os.path.join(audio_output_dir, f"{file_name}.wav")
-    sf.write(output_path, audio_stereo.T, GLOBAL_SR)
 
 
 # Processing Helpers
@@ -90,9 +52,6 @@ def loudness_thresh(data):
     hearable_audio_thresh = -100
     floor = -120
     data[data < hearable_audio_thresh] = floor
-
-    # mask = 1 / (1 + np.exp(-(data - hearable_audio_thresh)))
-    # data = data * mask + floor * (1 - mask)
 
     return data
 
@@ -139,19 +98,22 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
 
 
 # Encoding audio
-# def extract_sample_magnitudes(audio_data):
-#     sample_as_magnitudes = []
+def encode_sample_directory(sample_dir, silent=True):
+    check_and_delete_DSStore(sample_dir)
 
-#     for channel in audio_data:
-#         channel_mean = np.mean(channel)
-#         channel -= channel_mean
-#         stft = STFT.stft(channel)
-#         magnitudes = np.abs(stft).T
-#         sample_as_magnitudes.append(magnitudes)
+    real_data = []
+    # Encode samples
+    for root, _, all_samples in os.walk(sample_dir):
+        for sample_name in all_samples:
+            sample_path = os.path.join(root, sample_name)
 
-#     sample_as_magnitudes = np.array(sample_as_magnitudes)
+            loudness_data = encode_sample(sample_path)
+            real_data.append(loudness_data)
 
-#     return sample_as_magnitudes  # (2 Channels, x Frames, y FreqBins)
+            if silent is not True and np.random.rand() < 0.005:
+                graph_spectrogram(loudness_data, sample_name)
+
+    save_freq_info(real_data, compiled_data_path)
 
 
 def extract_sample_magnitudes(audio_data):
@@ -160,19 +122,18 @@ def extract_sample_magnitudes(audio_data):
     for channel in audio_data:
         channel_mean = np.mean(channel)
         channel -= channel_mean
-        _, _, stft = scipy.signal.stft(
-            channel,
-            fs=GLOBAL_SR,
-            window=win,
-            nperseg=GLOBAL_WIN,
-            noverlap=GLOBAL_WIN - GLOBAL_HOP,
-        )
+        stft = STFT.stft(channel)
         magnitudes = np.abs(stft).T
+
+        # Remove vertical artifact
+        if magnitudes.shape[0] != N_FRAMES:
+            magnitudes = magnitudes[:N_FRAMES, :]
+
         sample_as_magnitudes.append(magnitudes)
 
     sample_as_magnitudes = np.array(sample_as_magnitudes)
 
-    return sample_as_magnitudes  # (2 Channels, x Frames, y FreqBins)
+    return sample_as_magnitudes  # (2 Channels, 256 Frames, 256 FreqBins)
 
 
 def scale_magnitude_to_normalized_loudness(channel_magnitudes):
@@ -192,6 +153,25 @@ def encode_sample(sample_path):
 
 
 # Decoding audio
+def normalized_loudness_to_audio(loudness_data, file_name):
+    audio_channel_loudness_info = []
+    audio_reconstruction = []
+
+    for channel_loudness in loudness_data:
+        channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
+        audio_channel_loudness_info.append(channel_db_loudnes)
+
+        channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
+        # audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
+        audio_signal = istft_with_rtisi(channel_magnitudes)
+
+        audio_reconstruction.append(audio_signal)
+    audio_stereo = np.vstack(audio_reconstruction)
+
+    output_path = os.path.join(audio_output_dir, f"{file_name}.wav")
+    sf.write(output_path, audio_stereo.T, GLOBAL_SR)
+
+
 def scale_normalized_loudness_to_magnitudes(normalized_loudness):
     loudness_data = scale_data_to_range(normalized_loudness, -120, 40)
     loudness_data = loudness_thresh(loudness_data)
@@ -206,62 +186,25 @@ def istft_with_rtisi(magnitudes):
 
     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
     stft = magnitudes * angles
+    frames, fbins = stft.shape
 
     for _ in range(iterations):
-        _, y = scipy.signal.istft(
-            stft.T,
-            fs=GLOBAL_SR,
-            window=win,
-            nperseg=GLOBAL_WIN,
-            noverlap=GLOBAL_WIN - GLOBAL_HOP,
-        )
-        _, _, stft_new = scipy.signal.stft(
-            y,
-            fs=GLOBAL_SR,
-            window=win,
-            nperseg=GLOBAL_WIN,
-            noverlap=GLOBAL_WIN - GLOBAL_HOP,
-        )
+        y = STFT.istft(stft.T)
+        stft_new = STFT.stft(y)
+        stft_new = stft_new.T
+
+        # Remove vertical artifact
+        if stft_new.shape[0] != N_FRAMES:
+            stft_new = stft_new[:N_FRAMES, :]
 
         angles_new = np.exp(1j * np.angle(stft_new))
+
         new_magnitudes = np.abs(stft_new)
 
-        consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes.T)
-        stft = consistent_magnitudes * angles_new.T
+        consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes)
+        stft = consistent_magnitudes * angles_new
 
-    _, audio_signal = scipy.signal.istft(
-        stft.T,
-        fs=GLOBAL_SR,
-        window=win,
-        nperseg=GLOBAL_WIN,
-        noverlap=GLOBAL_WIN - GLOBAL_HOP,
-    )
-    return audio_signal
-
-
-# def istft_with_rtisi(magnitudes):
-#     iterations = 10
-
-#     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
-#     stft = magnitudes * angles
-#     frames, fbins = stft.shape
-
-#     for _ in range(iterations):
-#         y = STFT.istft(stft.T)
-#         stft_new = STFT.stft(y)
-#         stft_new = stft_new.T
-
-#         if stft.shape[0] != stft_new.shape[0]:
-#             stft_new = stft_new[:frames, :fbins]
-
-#         angles_new = np.exp(1j * np.angle(stft_new))
-
-#         new_magnitudes = np.abs(stft_new)
-
-#         consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes)
-#         stft = consistent_magnitudes * angles_new
-
-#     return STFT.istft(stft.T)
+    return STFT.istft(stft.T)
 
 
 def istft_with_griffin_lim_reconstruction(magnitudes):
