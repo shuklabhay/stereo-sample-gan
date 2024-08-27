@@ -23,6 +23,7 @@ N_FREQ_BINS = 256
 # Initialize STFT Object
 GLOBAL_WIN = (N_FREQ_BINS - 1) * 2
 GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (N_FRAMES - 1)
+
 win = scipy.signal.windows.hann(GLOBAL_WIN)
 STFT = scipy.signal.ShortTimeFFT(
     win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
@@ -65,6 +66,17 @@ def scale_data_to_range(data, new_min, new_max):
     return scaled_data
 
 
+def clean_stft(channel):
+    stft = STFT.stft(channel)
+    magnitudes = np.abs(stft).T
+
+    # Remove stft vertical artifact
+    if magnitudes.shape[0] != N_FRAMES:
+        magnitudes = magnitudes[:N_FRAMES, :]
+
+    return magnitudes
+
+
 def graph_spectrogram(audio_data, sample_name, graphScale=10):
     fig = sp.make_subplots(rows=2, cols=1)
     for i in range(2):
@@ -98,7 +110,7 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
 
 
 # Encoding audio
-def encode_sample_directory(sample_dir, silent=True):
+def encode_sample_directory(sample_dir, visualize=True):
     check_and_delete_DSStore(sample_dir)
 
     real_data = []
@@ -110,7 +122,7 @@ def encode_sample_directory(sample_dir, silent=True):
             loudness_data = encode_sample(sample_path)
             real_data.append(loudness_data)
 
-            if silent is not True and np.random.rand() < 0.005:
+            if visualize is True and np.random.rand() < 0.005:
                 graph_spectrogram(loudness_data, sample_name)
 
     save_freq_info(real_data, compiled_data_path)
@@ -122,12 +134,7 @@ def extract_sample_magnitudes(audio_data):
     for channel in audio_data:
         channel_mean = np.mean(channel)
         channel -= channel_mean
-        stft = STFT.stft(channel)
-        magnitudes = np.abs(stft).T
-
-        # Remove vertical artifact
-        if magnitudes.shape[0] != N_FRAMES:
-            magnitudes = magnitudes[:N_FRAMES, :]
+        magnitudes = clean_stft(channel)
 
         sample_as_magnitudes.append(magnitudes)
 
@@ -162,8 +169,7 @@ def normalized_loudness_to_audio(loudness_data, file_name):
         audio_channel_loudness_info.append(channel_db_loudnes)
 
         channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
-        # audio_signal = istft_with_griffin_lim_reconstruction(channel_magnitudes)
-        audio_signal = istft_with_rtisi(channel_magnitudes)
+        audio_signal = griffin_lim_istft_with_time_frequency_masking(channel_magnitudes)
 
         audio_reconstruction.append(audio_signal)
     audio_stereo = np.vstack(audio_reconstruction)
@@ -182,43 +188,34 @@ def scale_normalized_loudness_to_magnitudes(normalized_loudness):
 
 
 def istft_with_rtisi(magnitudes):
-    iterations = 10
-
+    iterations = 40
     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
     stft = magnitudes * angles
-    frames, fbins = stft.shape
 
     for _ in range(iterations):
         y = STFT.istft(stft.T)
-        stft_new = STFT.stft(y)
-        stft_new = stft_new.T
-
-        # Remove vertical artifact
-        if stft_new.shape[0] != N_FRAMES:
-            stft_new = stft_new[:N_FRAMES, :]
+        stft_new = clean_stft(y)
 
         angles_new = np.exp(1j * np.angle(stft_new))
 
-        new_magnitudes = np.abs(stft_new)
-
-        consistent_magnitudes = 0.5 * (magnitudes + new_magnitudes)
-        stft = consistent_magnitudes * angles_new
+        stft = magnitudes * angles_new
 
     return STFT.istft(stft.T)
 
 
-def istft_with_griffin_lim_reconstruction(magnitudes):
-    iterations = 5
+def griffin_lim_istft_with_time_frequency_masking(magnitudes):
+    iterations = 20
     angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
+    stft = magnitudes * angles
+    mask = (magnitudes > np.mean(magnitudes)) * 1.0
 
-    for i in range(iterations):
-        full = magnitudes * angles
-        istft = STFT.istft(full.T)
-        stft = STFT.stft(istft)
+    for _ in range(iterations):
+        y = STFT.istft(stft.T)
+        stft_new = clean_stft(y)
 
-        if stft.shape[1] != magnitudes.shape[0]:
-            stft = stft[:, : magnitudes.shape[0]]
+        stft_new *= mask
 
-        angles = np.exp(1j * np.angle(stft.T))
+        angles_new = np.exp(1j * np.angle(stft_new))
+        stft = magnitudes * angles_new
 
-    return STFT.istft((magnitudes * angles).T)
+    return STFT.istft(stft.T)

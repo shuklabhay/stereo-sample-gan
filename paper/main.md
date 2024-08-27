@@ -110,13 +110,13 @@ oh drums do this, synths do this, snares do this, >1s audio does this, etc
 
 ### 5.3. STFT and iSTFT Validation
 
-talk about audio processing valudation file stuff
+talk about audio processing valudation file stuff. tested rtisi, gla, gla w/ env matching, gla w/ time-freq masking, gla w magnitude guided reconstriuction, gla w/ freq bin weighting- after lots of experimentation found that gla with time freq masking produced the closest result to original data
 
 explain signal reconstruction test + findings
 
-isnt a problem with stft, imrpoving the implementation just hard for me
+talk abt auditory test comparing random examples w/ different windows, reconstruction algos, found rtisi better than griffin lim, wtv
 
-potential reason for model being so bad: stft istft hella lossy.
+important limitation of this method of audio generation
 
 ### 5.4. Contributions
 
