@@ -71,7 +71,7 @@ def compute_generator_loss(
         # Force vertical
         g_adv_loss
         + feat_match  # compare features at layers
-        + relative_smoothness  # compare random periodic stuff
+        # + relative_smoothness  # compare random periodic stuff
     )
     return g_loss
 
@@ -105,7 +105,7 @@ def compute_discrim_loss(
 
     # Extra metrics
     spectral_diff = 0.3 * calculate_spectral_diff(real_audio_data, fake_audio_data)
-    spectral_convergence = 0.2 * calculate_spectral_convergence_diff(
+    spectral_convergence = 0.25 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
     )
 

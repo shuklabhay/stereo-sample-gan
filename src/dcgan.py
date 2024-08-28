@@ -16,8 +16,8 @@ from utils.file_helpers import (
 )
 
 # Constants
-LR_G = 0.004
-LR_D = 0.004
+LR_G = 0.005
+LR_D = 0.005
 
 # Load data
 all_spectrograms = load_npy_data(compiled_data_path)
