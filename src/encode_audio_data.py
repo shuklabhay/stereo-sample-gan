@@ -1,10 +1,10 @@
 import sys
-from file_helpers import (
+from utils.file_helpers import (
     audio_data_dir,
     compiled_data_path,
     load_npy_data,
 )
-from signal_helpers import encode_sample_directory
+from utils.signal_helpers import encode_sample_directory
 
 # Encode samples
 if len(sys.argv) > 1:
