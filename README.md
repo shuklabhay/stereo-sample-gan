@@ -4,7 +4,7 @@
 
 A lightweight approach high fidelity stereo audio sample generation. Generate a kick drum by running `generate.py`.
 
-Generated audio examples:
+Generated audio spectrogram examples:
 ![Audio Example 1](paper/static/generated_audio_example_1.png)
 ![Audio Example 2](paper/static/generated_audio_example_2.png)
 ![Audio Example 3](paper/static/generated_audio_example_3.png)
