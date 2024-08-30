@@ -1,4 +1,4 @@
-# StereoSampleGAN: Lightweight Stereo Audio Sample Generation
+# StereoSampleGAN: A Lightweight Approach High Fidelity Stereo Audio Generation.
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
