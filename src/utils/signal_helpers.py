@@ -8,6 +8,9 @@ import soundfile as sf
 
 from utils.file_helpers import (
     audio_output_dir,
+    compiled_data_path,
+    delete_DSStore,
+    save_loudness_information,
 )
 
 
@@ -24,42 +27,6 @@ GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (N_FRAMES - 1)
 window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
-def zero_pad_audio(audio, pad_length):
-    return np.pad(audio, (pad_length, pad_length), mode="edge")
-
-
-def griffin_lim_istft(magnitudes):
-    iterations = 70
-    momentum = 0.3
-    angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
-    stft = magnitudes.astype(np.complex64) * angles
-
-    for i in range(iterations):
-        y = librosa.istft(
-            stft.T,
-            hop_length=GLOBAL_HOP,
-            win_length=GLOBAL_WIN,
-            window=window,
-            center=True,
-        )
-        if i > 0:
-            y = momentum * y + (1 - momentum) * y_prev
-        y_prev = y.copy()
-
-        stft = librosa.stft(
-            y,
-            n_fft=GLOBAL_WIN,
-            hop_length=GLOBAL_HOP,
-            win_length=GLOBAL_WIN,
-            window=window,
-            center=True,
-        )
-        angles = np.exp(1j * np.angle(stft.T))
-        stft = magnitudes * angles
-
-    return y
-
-
 def audio_to_norm_db(channel_info):
     magnitudes = librosa.stft(
         channel_info,
@@ -71,17 +38,16 @@ def audio_to_norm_db(channel_info):
         pad_mode="edge",
     )
     loudness_info = librosa.amplitude_to_db(np.abs(magnitudes.T))
-    loudness_info = loudness_thresh(loudness_info)
     loudness_info = loudness_info[:N_FRAMES, :N_FREQ_BINS]
 
     return scale_data_to_range(
-        loudness_thresh(loudness_info), -1, 1
+        loudness_info, -1, 1
     )  # OUT: Frames, Freq Bins in norm dB
 
 
 def norm_db_to_audio(loudness_info):
     # IN: Frames, Freq Bins in norm dB
-    loudness_info = scale_data_to_range(loudness_info, -120, 40)
+    loudness_info = scale_data_to_range(loudness_info, -40, 40)
     magnitudes = librosa.db_to_amplitude(loudness_info)
 
     audio = griffin_lim_istft(magnitudes)
@@ -130,6 +96,37 @@ def stft_and_istft(path, file_name):
 
 
 # Helpers
+def griffin_lim_istft(magnitudes):
+    iterations = 35
+    momentum = 0.6
+    angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
+    stft = magnitudes.astype(np.complex64) * angles
+
+    for i in range(iterations):
+        y = librosa.istft(
+            stft.T,
+            hop_length=GLOBAL_HOP,
+            win_length=GLOBAL_WIN,
+            window=window,
+            center=True,
+        )
+        if i > 0:
+            y = momentum * y + (1 - momentum) * y_prev
+        y_prev = y.copy()
+
+        stft = librosa.stft(
+            y,
+            n_fft=GLOBAL_WIN,
+            hop_length=GLOBAL_HOP,
+            win_length=GLOBAL_WIN,
+            window=window,
+            center=True,
+        )
+        angles = np.exp(1j * np.angle(stft.T))
+
+    return magnitudes * angles
+
+
 def scale_data_to_range(data, new_min, new_max):
     old_min, old_max = np.min(data), np.max(data)
     old_range, new_range = old_max - old_min, new_max - new_min
@@ -137,14 +134,6 @@ def scale_data_to_range(data, new_min, new_max):
     scaled_data = np.round(scaled_data, decimals=6)
 
     return scaled_data
-
-
-def loudness_thresh(data):
-    hearable_audio_thresh = -100
-    floor = data.min()
-    data[data < hearable_audio_thresh] = floor
-
-    return data
 
 
 def graph_spectrogram(audio_data, sample_name):
@@ -181,26 +170,25 @@ def graph_spectrogram(audio_data, sample_name):
     fig.show()
 
 
-# Encoding audio
-# def encode_sample_directory(sample_dir, visualize=True):
-#     delete_DSStore(sample_dir)
+# Helpers 2
+def encode_sample_directory(sample_dir, visualize=True):
+    delete_DSStore(sample_dir)
 
-#     real_data = []
-#     # Encode samples
-#     for root, _, all_samples in os.walk(sample_dir):
-#         for sample_name in all_samples:
-#             sample_path = os.path.join(root, sample_name)
+    real_data = []
+    # Encode samples
+    for root, _, all_samples in os.walk(sample_dir):
+        for sample_name in all_samples:
+            sample_path = os.path.join(root, sample_name)
 
-#             loudness_data = audio_to_normalized_loudness(sample_path)
-#             real_data.append(loudness_data)
+            loudness_data = audio_to_norm_db(sample_path)
+            real_data.append(loudness_data)
 
-#             if visualize is True and np.random.rand() < 0.005:
-#                 graph_spectrogram(loudness_data, sample_name)
+            if visualize is True and np.random.rand() < 0.005:
+                graph_spectrogram(loudness_data, sample_name)
 
-#     save_loudness_information(real_data, compiled_data_path)
+    save_loudness_information(real_data, compiled_data_path)
 
 
-# Random testing
 def generate_sine_impulses(num_impulses=1, outPath="model"):
     amplitude = 1
     for i in range(num_impulses):

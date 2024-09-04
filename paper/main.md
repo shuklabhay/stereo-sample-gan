@@ -50,7 +50,9 @@ basically like yeah rewrite/modify this with the changes that fixed the fft arti
 talk about istft time-freq mask, also how non stero data is duplicated then to be made stereo
 mention that each channel is processed seperately, like do stft on left and then right
 
-- freq masking on stft, griffin lim on istft
+- talk abt the scaling stuff like the norm db and unnorm db- bix fix being setting unnorm to correct value preserves high ened of signal or whatever
+
+ALSO INCLUDE METRIC: CALCULATE THE AVG DIFFERENCE BETWEEN ORIGINAL AND REGENERATED AUDIO FOR EVERY SINGLE DATA POINT- PROVE PROCESSING PIPELINE EFFECTIVELYY
 
 Convolution by nature can not learn about the time-series component of audio data, thus this feature extraction process must flatten all the audio into a static form of data. This is achieved by representing audio with their magnitudes the time-frequency domain, similar to a spectrogram representation of audio. Each sample is first converted into a two channel array using a standard 44100 hz sampling rate. Then the audio sample is normalized to a length of 700 miliseconds and passed into a Short-time Fourier Transform (STFT). The STFT uses a kaiser window with a beta value of 14, a window size of of 512, and a hope size of 128. These parameters were determined to be the most effective through a signal reconstruction test (see STFT and iSTFT validation) and also limited by hardware contraints. The phase information of each frequency is then discarded and the data tensor's final shape is 2 channels by 245 frames by 257 frequency bins. This representation of information can be compared to that of a spectrogram.
 
@@ -114,16 +116,6 @@ show learned kernels mayube??
 ### 5.2. Audio Specific Evaluations
 
 oh drums do this, synths do this, snares do this, >1s audio does this, etc
-
-### 5.3. STFT and iSTFT Validation
-
-talk about audio processing valudation file stuff. tested rtisi, gla, gla w/ env matching, gla w/ time-freq masking, gla w magnitude guided reconstriuction, gla w/ freq bin weighting- after lots of experimentation found that gla with time freq masking produced the closest result to original data
-
-explain signal reconstruction test + findings
-
-talk abt auditory test comparing random examples w/ different windows, reconstruction algos, found rtisi better than griffin lim, wtv
-
-important limitation of this method of audio generation
 
 ### 5.4. Contributions
 
