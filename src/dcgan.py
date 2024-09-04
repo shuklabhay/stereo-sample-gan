@@ -11,7 +11,7 @@ from architecture import (
 from train import training_loop
 from utils.file_helpers import (
     get_device,
-    load_npy_data,
+    load_loudness_information,
     compiled_data_path,
 )
 
@@ -20,7 +20,7 @@ LR_G = 0.005
 LR_D = 0.005
 
 # Load data
-all_spectrograms = load_npy_data(compiled_data_path)
+all_spectrograms = load_loudness_information(compiled_data_path)
 all_spectrograms = torch.FloatTensor(all_spectrograms)
 train_size = int(0.8 * len(all_spectrograms))
 val_size = len(all_spectrograms) - train_size
