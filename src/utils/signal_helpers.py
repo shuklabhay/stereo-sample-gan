@@ -7,65 +7,124 @@ import scipy
 import soundfile as sf
 
 from utils.file_helpers import (
-    save_loudness_information,
-    delete_DSStore,
     audio_output_dir,
     compiled_data_path,
+    delete_DSStore,
+    save_loudness_information,
 )
 
 
 # Constants
-AUDIO_SAMPLE_LENGTH = 0.7  # 700 ms
+AUDIO_SAMPLE_LENGTH = 0.6  # 600 ms
 GLOBAL_SR = 44100
 N_CHANNELS = 2  # Left, right
 N_FRAMES = 256
 N_FREQ_BINS = 256
 
 # STFT Helpers
-GLOBAL_WIN = (N_FREQ_BINS - 1) * 2
+GLOBAL_WIN = 510
 GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (N_FRAMES - 1)
-
-win = scipy.signal.windows.hann(GLOBAL_WIN)
-STFT = scipy.signal.ShortTimeFFT(
-    win=win, hop=GLOBAL_HOP, fs=GLOBAL_SR, scale_to="magnitude"
-)
+window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
-def clean_stft(channel):
-    stft = STFT.stft(channel)
-    magnitudes = np.abs(stft).T
+def audio_to_norm_db(channel_info):
+    magnitudes = librosa.stft(
+        channel_info,
+        n_fft=GLOBAL_WIN,
+        hop_length=GLOBAL_HOP,
+        win_length=GLOBAL_WIN,
+        window=window,
+        center=True,
+        pad_mode="edge",
+    )
+    loudness_info = librosa.amplitude_to_db(np.abs(magnitudes.T))
+    loudness_info = loudness_info[:N_FRAMES, :N_FREQ_BINS]
 
-    if magnitudes.shape[0] != N_FRAMES:
-        magnitudes = magnitudes[:N_FRAMES, :]
-
-    return magnitudes
-
-
-# Processing
-def normalize_sample_length(audio_file_path):
-    target_length = AUDIO_SAMPLE_LENGTH
-
-    y, sr = librosa.load(audio_file_path, sr=GLOBAL_SR)
-    if len(y.shape) == 1:
-        y = np.vstack((y, y))
-
-    actual_length = len(y[0]) / sr
-
-    if actual_length > target_length:
-        y = y[:, : int(target_length * sr)]
-    else:
-        padding = int((target_length - actual_length) * sr)
-        y = np.pad(y, ((0, 0), (0, padding)), mode="linear_ramp")
-
-    return y
+    return scale_data_to_range(
+        loudness_info, -1, 1
+    )  # OUT: Frames, Freq Bins in norm dB
 
 
-def loudness_thresh(data):
-    hearable_audio_thresh = -100
-    floor = -120
-    data[data < hearable_audio_thresh] = floor
+def norm_db_to_audio(loudness_info):
+    # IN: Frames, Freq Bins in norm dB
+    loudness_info = scale_data_to_range(loudness_info, -40, 40)
+    magnitudes = librosa.db_to_amplitude(loudness_info)
 
-    return data
+    audio = griffin_lim_istft(magnitudes)
+
+    return audio
+
+
+def stft_and_istft(path, file_name):
+    # Load data
+    spectrogram = []
+    reconstructed_audio = []
+    reconstructed_spectrogram = []
+
+    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
+    if y.ndim == 1:
+        y = np.stack((y, y), axis=0)
+    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+
+    # Process data
+    for i in range(N_CHANNELS):
+        db_info = audio_to_norm_db(y[i])
+        spectrogram.append(db_info)
+
+        audio_info = norm_db_to_audio(db_info)
+        reconstructed_audio.append(audio_info)
+
+        vis_reconstr = audio_to_norm_db(audio_info)
+        reconstructed_spectrogram.append(vis_reconstr)
+
+    output_path = os.path.join(audio_output_dir, f"{file_name}.wav")
+    sf.write(output_path, np.array(reconstructed_audio).T, GLOBAL_SR)
+
+    graph_spectrogram(spectrogram, "stft")
+    graph_spectrogram(reconstructed_spectrogram, "post istft")
+
+    print(
+        "audio shape:",
+        np.array(y).shape,
+        "stft shape:",
+        np.array(spectrogram).shape,
+        "istft shape:",
+        np.array(reconstructed_audio).shape,
+        "istft vis shape:",
+        np.array(reconstructed_spectrogram).shape,
+    )
+
+
+# Helpers
+def griffin_lim_istft(magnitudes):
+    iterations = 35
+    momentum = 0.6
+    angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
+    stft = magnitudes.astype(np.complex64) * angles
+
+    for i in range(iterations):
+        y = librosa.istft(
+            stft.T,
+            hop_length=GLOBAL_HOP,
+            win_length=GLOBAL_WIN,
+            window=window,
+            center=True,
+        )
+        if i > 0:
+            y = momentum * y + (1 - momentum) * y_prev
+        y_prev = y.copy()
+
+        stft = librosa.stft(
+            y,
+            n_fft=GLOBAL_WIN,
+            hop_length=GLOBAL_HOP,
+            win_length=GLOBAL_WIN,
+            window=window,
+            center=True,
+        )
+        angles = np.exp(1j * np.angle(stft.T))
+
+    return magnitudes * angles
 
 
 def scale_data_to_range(data, new_min, new_max):
@@ -77,12 +136,14 @@ def scale_data_to_range(data, new_min, new_max):
     return scaled_data
 
 
-def graph_spectrogram(audio_data, sample_name, graphScale=10):
+def graph_spectrogram(audio_data, sample_name):
     fig = sp.make_subplots(rows=2, cols=1)
+
     for i in range(2):
         channel = audio_data[i]
-        channel = channel.T
-        spectrogram = channel
+        channel = channel
+        spectrogram = channel.T  # Visualize FreqBins vertically
+
         fig.add_trace(
             go.Heatmap(z=spectrogram, coloraxis="coloraxis1"),
             row=i + 1,
@@ -101,7 +162,7 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
                 title="Loudness",
                 titleside="right",
                 ticksuffix="",
-                dtick=graphScale,
+                dtick=channel.ptp() / 10,
             ),
         )
     )
@@ -109,7 +170,7 @@ def graph_spectrogram(audio_data, sample_name, graphScale=10):
     fig.show()
 
 
-# Encoding audio
+# Helpers 2
 def encode_sample_directory(sample_dir, visualize=True):
     delete_DSStore(sample_dir)
 
@@ -119,7 +180,7 @@ def encode_sample_directory(sample_dir, visualize=True):
         for sample_name in all_samples:
             sample_path = os.path.join(root, sample_name)
 
-            loudness_data = audio_to_normalized_loudness(sample_path)
+            loudness_data = audio_to_norm_db(sample_path)
             real_data.append(loudness_data)
 
             if visualize is True and np.random.rand() < 0.005:
@@ -128,78 +189,17 @@ def encode_sample_directory(sample_dir, visualize=True):
     save_loudness_information(real_data, compiled_data_path)
 
 
-def audio_to_normalized_loudness(sample_path):
-    normalized_y = normalize_sample_length(sample_path)
-    magnitudes = extract_sample_magnitudes(normalized_y)
-    loudness_data = scale_magnitude_to_normalized_loudness(magnitudes)
-    return loudness_data
+def generate_sine_impulses(num_impulses=1, outPath="model"):
+    amplitude = 1
+    for i in range(num_impulses):
+        t = np.arange(0, AUDIO_SAMPLE_LENGTH, 1 / GLOBAL_SR)
+        freq = np.random.uniform(0, 20000)
+        audio_wave = amplitude * np.sin(2 * np.pi * freq * t)
+        num_samples = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR)
+        audio_signal = np.zeros(num_samples)
 
+        audio_wave = audio_wave[:num_samples]
+        audio_signal[:] = audio_wave
 
-def extract_sample_magnitudes(audio_data):
-    sample_as_magnitudes = []
-
-    for channel in audio_data:
-        channel_mean = np.mean(channel)
-        channel -= channel_mean
-        magnitudes = clean_stft(channel)
-
-        sample_as_magnitudes.append(magnitudes)
-
-    sample_as_magnitudes = np.array(sample_as_magnitudes)
-
-    return sample_as_magnitudes  # (2 Channels, 256 Frames, 256 FreqBins)
-
-
-def scale_magnitude_to_normalized_loudness(channel_magnitudes):
-    channel_magnitudes = scale_data_to_range(channel_magnitudes, 0, 100)
-    channel_loudness = 20 * np.log10(np.abs(channel_magnitudes) + 1e-6)
-
-    channel_loudness = loudness_thresh(channel_loudness)
-    normalized_loudness = scale_data_to_range(channel_loudness, -1, 1)
-    return normalized_loudness
-
-
-# Decoding audio
-def normalized_loudness_to_audio(loudness_data, file_name):
-    audio_channel_loudness_info = []
-    audio_reconstruction = []
-
-    for channel_loudness in loudness_data:
-        channel_db_loudnes = scale_data_to_range(channel_loudness, -120, 40)
-        audio_channel_loudness_info.append(channel_db_loudnes)
-
-        channel_magnitudes = scale_normalized_loudness_to_magnitudes(channel_loudness)
-        audio_signal = griffin_lim_istft_with_time_freq_masking(channel_magnitudes)
-
-        audio_reconstruction.append(audio_signal)
-    audio_stereo = np.vstack(audio_reconstruction)
-
-    output_path = os.path.join(audio_output_dir, f"{file_name}.wav")
-    sf.write(output_path, audio_stereo.T, GLOBAL_SR)
-
-
-def scale_normalized_loudness_to_magnitudes(normalized_loudness):
-    loudness_data = scale_data_to_range(normalized_loudness, -120, 40)
-    loudness_data = loudness_thresh(loudness_data)
-
-    channel_magnitudes = np.power(10, (loudness_data / 20))
-
-    return channel_magnitudes
-
-
-def griffin_lim_istft_with_time_freq_masking(magnitudes):
-    iterations = 25
-    angles = np.exp(2j * np.pi * np.random.rand(*magnitudes.shape))
-    stft = magnitudes * angles
-    mask = (magnitudes > np.mean(magnitudes)) * 1.0
-
-    for _ in range(iterations):
-        y = STFT.istft(stft.T)
-        stft_new = clean_stft(y)
-
-        stft_new *= mask
-
-        angles_new = np.exp(1j * np.angle(stft_new))
-        stft = magnitudes * angles_new
-
-    return STFT.istft(stft.T)
+        save_path = os.path.join(outPath, f"{freq:.2f}.wav")
+        sf.write(save_path, audio_signal, GLOBAL_SR)
