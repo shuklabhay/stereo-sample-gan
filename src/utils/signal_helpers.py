@@ -27,14 +27,6 @@ window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
 # Main Helpers
-def load_audio(path):
-    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
-    if y.ndim == 1:
-        y = np.stack((y, y), axis=0)
-    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
-    return y
-
-
 def audio_to_norm_db(channel_info):
     # IN: Audio information
     stereo_loudness_info = []
@@ -136,6 +128,14 @@ def encode_sample_directory(sample_dir, visualize=True):
                 graph_spectrogram(loudness_data, sample_name)
 
     save_loudness_data(real_data, compiled_data_path)
+
+
+def load_audio(path):
+    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
+    if y.ndim == 1:
+        y = np.stack((y, y), axis=0)
+    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+    return y
 
 
 def scale_data_to_range(data, new_min, new_max):
