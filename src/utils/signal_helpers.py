@@ -27,6 +27,14 @@ window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
 # Main Helpers
+def load_audio(path):
+    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
+    if y.ndim == 1:
+        y = np.stack((y, y), axis=0)
+    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+    return y
+
+
 def audio_to_norm_db(channel_info):
     # IN: Audio information
     stereo_loudness_info = []
@@ -120,7 +128,8 @@ def encode_sample_directory(sample_dir, visualize=True):
         for sample_name in all_samples:
             sample_path = os.path.join(root, sample_name)
 
-            loudness_data = audio_to_norm_db(sample_path)
+            y = load_audio(sample_path)
+            loudness_data = audio_to_norm_db(y)
             real_data.append(loudness_data)
 
             if visualize is True and np.random.rand() < 0.005:
@@ -191,10 +200,7 @@ def generate_sine_impulses(num_impulses=1, outPath="model"):
 
 def stft_and_istft(path, file_name):
     # Load data
-    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
-    if y.ndim == 1:
-        y = np.stack((y, y), axis=0)
-    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+    y = load_audio(path)
 
     # Process data
     stft = audio_to_norm_db(y)
