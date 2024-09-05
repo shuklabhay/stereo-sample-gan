@@ -7,7 +7,6 @@ import os
 import random
 from utils.file_helpers import audio_data_dir
 from utils.signal_helpers import (
-    generate_sine_impulses,
     stft_and_istft,
 )
 
@@ -28,7 +27,5 @@ def choose_random_sample():
 
 # Analyze fourier transform audio degradation
 sample_path, sample_name = choose_random_sample()
-
-sine_sample_path = "model/2763.68.wav"
 
 stft_and_istft(sample_path, "test")

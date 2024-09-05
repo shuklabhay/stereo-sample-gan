@@ -4,19 +4,19 @@ import os
 import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
-import soundfile as sf
 
 from utils.file_helpers import (
+    GLOBAL_SR,
     audio_output_dir,
     compiled_data_path,
     delete_DSStore,
-    save_loudness_information,
+    save_audio,
+    save_loudness_data,
 )
 
 
 # Constants
 AUDIO_SAMPLE_LENGTH = 0.6  # 600 ms
-GLOBAL_SR = 44100
 N_CHANNELS = 2  # Left, right
 DATA_SHAPE = 256
 
@@ -26,74 +26,42 @@ GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (DATA_SHAPE - 1)
 window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
-def stft_and_istft(path, file_name):
-    # Load data
-    spectrogram = []
-    reconstructed_audio = []
-    reconstructed_spectrogram = []
-
-    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
-    if y.ndim == 1:
-        y = np.stack((y, y), axis=0)
-    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
-
-    # Process data
-    for i in range(N_CHANNELS):
-        db_info = audio_to_norm_db(y[i])
-        spectrogram.append(db_info)
-
-        audio_info = norm_db_to_audio(db_info)
-        reconstructed_audio.append(audio_info)
-
-        vis_reconstr = audio_to_norm_db(audio_info)
-        reconstructed_spectrogram.append(vis_reconstr)
-
-    output_path = os.path.join(audio_output_dir, f"{file_name}.wav")
-    sf.write(output_path, np.array(reconstructed_audio).T, GLOBAL_SR)
-
-    graph_spectrogram(spectrogram, "stft")
-    graph_spectrogram(reconstructed_spectrogram, "post istft")
-
-    print(
-        "audio shape:",
-        np.array(y).shape,
-        "stft shape:",
-        np.array(spectrogram).shape,
-        "istft shape:",
-        np.array(reconstructed_audio).shape,
-        "istft vis shape:",
-        np.array(reconstructed_spectrogram).shape,
-    )
-
-
 # Main Helpers
 def audio_to_norm_db(channel_info):
     # IN: Audio information
-    magnitudes = librosa.stft(
-        channel_info,
-        n_fft=GLOBAL_WIN,
-        hop_length=GLOBAL_HOP,
-        win_length=GLOBAL_WIN,
-        window=window,
-        center=True,
-        pad_mode="linear_ramp",
-    )
-    loudness_info = librosa.amplitude_to_db(np.abs(magnitudes.T))
-    loudness_info = loudness_info[:DATA_SHAPE, :DATA_SHAPE]
+    stereo_loudness_info = []
 
-    return scale_data_to_range(
-        loudness_info, -1, 1
-    )  # OUT: Frames, Freq Bins in norm dB
+    for i in range(N_CHANNELS):
+        magnitudes = librosa.stft(
+            np.asarray(channel_info[i]),
+            n_fft=GLOBAL_WIN,
+            hop_length=GLOBAL_HOP,
+            win_length=GLOBAL_WIN,
+            window=window,
+            center=True,
+            pad_mode="linear_ramp",
+        )
+        loudness_info = librosa.amplitude_to_db(np.abs(magnitudes.T))
+        loudness_info = loudness_info[:DATA_SHAPE, :DATA_SHAPE]
+
+        norm_loudness_info = scale_data_to_range(loudness_info, -1, 1)
+        stereo_loudness_info.append(norm_loudness_info)
+
+    return np.array(stereo_loudness_info)  # OUT: Frames, Freq Bins in norm dB
 
 
 def norm_db_to_audio(loudness_info):
     # IN: Frames, Freq Bins in norm dB
-    loudness_info = scale_data_to_range(loudness_info, -40, 40)
-    magnitudes = librosa.db_to_amplitude(loudness_info)
+    stereo_audio = []
 
-    audio = griffin_lim_istft(magnitudes)
+    for i in range(N_CHANNELS):
+        data = scale_data_to_range(loudness_info[i], -40, 40)
+        magnitudes = librosa.db_to_amplitude(data)
+        istft = griffin_lim_istft(magnitudes)
 
-    return audio  # OUT: Audio information
+        stereo_audio.append(istft)
+
+    return np.array(stereo_audio)  # OUT: Audio information
 
 
 def griffin_lim_istft(channel_magnitudes):
@@ -142,20 +110,11 @@ def griffin_lim_istft(channel_magnitudes):
     return complex_istft
 
 
-# Other Helpers
-def scale_data_to_range(data, new_min, new_max):
-    old_min, old_max = np.min(data), np.max(data)
-    old_range, new_range = old_max - old_min, new_max - new_min
-    scaled_data = (data - old_min) * (new_range / (old_range + 1e-6)) + new_min
-    scaled_data = np.round(scaled_data, decimals=6)
-
-    return scaled_data
-
-
+# Data Helpers
 def encode_sample_directory(sample_dir, visualize=True):
     delete_DSStore(sample_dir)
-
     real_data = []
+
     # Encode samples
     for root, _, all_samples in os.walk(sample_dir):
         for sample_name in all_samples:
@@ -167,9 +126,19 @@ def encode_sample_directory(sample_dir, visualize=True):
             if visualize is True and np.random.rand() < 0.005:
                 graph_spectrogram(loudness_data, sample_name)
 
-    save_loudness_information(real_data, compiled_data_path)
+    save_loudness_data(real_data, compiled_data_path)
 
 
+def scale_data_to_range(data, new_min, new_max):
+    old_min, old_max = np.min(data), np.max(data)
+    old_range, new_range = old_max - old_min, new_max - new_min
+    scaled_data = (data - old_min) * (new_range / (old_range + 1e-6)) + new_min
+    scaled_data = np.round(scaled_data, decimals=6)
+
+    return scaled_data
+
+
+# Validation helpers
 def graph_spectrogram(audio_data, sample_name):
     fig = sp.make_subplots(rows=2, cols=1)
 
@@ -217,4 +186,35 @@ def generate_sine_impulses(num_impulses=1, outPath="model"):
         audio_signal[:] = audio_wave
 
         save_path = os.path.join(outPath, f"{freq:.2f}.wav")
-        sf.write(save_path, audio_signal, GLOBAL_SR)
+        save_audio(save_path, audio_signal)
+
+
+def stft_and_istft(path, file_name):
+    # Load data
+    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
+    if y.ndim == 1:
+        y = np.stack((y, y), axis=0)
+    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+
+    # Process data
+    stft = audio_to_norm_db(y)
+    istft = norm_db_to_audio(stft)
+    vis_istft = audio_to_norm_db(istft)
+
+    # Visualize/save data
+    print(
+        "audio shape:",
+        np.array(y).shape,
+        "stft shape:",
+        stft.shape,
+        "istft shape:",
+        istft.shape,
+        "istft vis shape:",
+        vis_istft.shape,
+    )
+
+    save_path = os.path.join(audio_output_dir, f"{file_name}.wav")
+    save_audio(save_path, istft)
+
+    graph_spectrogram(stft, "stft")
+    graph_spectrogram(vis_istft, "post istft")

@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import torch
+import soundfile as sf
 
 # Constants
 audio_data_dir = "data/kick_samples"
@@ -8,15 +9,20 @@ compiled_data_path = "data/compiled_data.npy"
 average_spectrogram_path = "data/average_spectrogram.npy"
 audio_output_dir = "model"
 model_save_dir = "model"
+GLOBAL_SR = 44100
 
 
 # File Utility
-def load_loudness_information(file_path):
+def load_loudness_data(file_path):
     return np.load(file_path, allow_pickle=True)
 
 
-def save_loudness_information(loudness_information, save_path):
+def save_loudness_data(loudness_information, save_path):
     np.save(save_path, loudness_information)
+
+
+def save_audio(save_path, audio):
+    sf.write(save_path, audio.T, GLOBAL_SR)
 
 
 def save_model(model, name, preserve_old=False):
