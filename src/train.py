@@ -7,8 +7,8 @@ from utils.file_helpers import (
 from utils.signal_helpers import graph_spectrogram, scale_data_to_range
 
 # Constants
-N_EPOCHS = 6
-VALIDATION_INTERVAL = 1  # int(N_EPOCHS / 3)
+N_EPOCHS = 4
+VALIDATION_INTERVAL = 1
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 
@@ -255,7 +255,7 @@ def training_loop(
             for i in range(examples_to_generate):
                 generated_audio_np = generated_audio[i].cpu().detach().numpy()
                 graph_spectrogram(
-                    scale_data_to_range(generated_audio_np, -120, 40),
+                    generated_audio_np,
                     f"Epoch {epoch + 1} Generated Audio #{i + 1}",
                 )
 
