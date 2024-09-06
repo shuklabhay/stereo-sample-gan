@@ -7,8 +7,7 @@ import soundfile as sf
 audio_data_dir = "data/kick_samples"
 compiled_data_path = "data/compiled_data.npy"
 average_spectrogram_path = "data/average_spectrogram.npy"
-audio_output_dir = "model"
-model_save_dir = "model"
+outputs_dir = "outputs"
 GLOBAL_SR = 44100
 
 
@@ -28,14 +27,14 @@ def save_audio(save_path, audio):
 def save_model(model, name, preserve_old=False):
     # Clear previous models
     if preserve_old is not True:
-        for filename in os.listdir(model_save_dir):
-            file_path = os.path.join(model_save_dir, filename)
+        for filename in os.listdir(outputs_dir):
+            file_path = os.path.join(outputs_dir, filename)
             os.remove(file_path)
 
     # Save model
     torch.save(
         model.state_dict(),
-        f"{model_save_dir}/{name}.pth",
+        f"{outputs_dir}/{name}.pth",
     )
     print(f"Model Saved")
 

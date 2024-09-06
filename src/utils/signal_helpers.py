@@ -7,7 +7,7 @@ import scipy
 
 from utils.file_helpers import (
     GLOBAL_SR,
-    audio_output_dir,
+    outputs_dir,
     compiled_data_path,
     delete_DSStore,
     save_audio,
@@ -111,6 +111,14 @@ def griffin_lim_istft(channel_magnitudes):
 
 
 # Data Helpers
+def load_audio(path):
+    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
+    if y.ndim == 1:
+        y = np.stack((y, y), axis=0)
+    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+    return y
+
+
 def encode_sample_directory(sample_dir, visualize=True):
     delete_DSStore(sample_dir)
     real_data = []
@@ -128,14 +136,6 @@ def encode_sample_directory(sample_dir, visualize=True):
                 graph_spectrogram(loudness_data, sample_name)
 
     save_loudness_data(real_data, compiled_data_path)
-
-
-def load_audio(path):
-    y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
-    if y.ndim == 1:
-        y = np.stack((y, y), axis=0)
-    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
-    return y
 
 
 def scale_data_to_range(data, new_min, new_max):
@@ -219,7 +219,7 @@ def stft_and_istft(path, file_name):
         vis_istft.shape,
     )
 
-    save_path = os.path.join(audio_output_dir, f"{file_name}.wav")
+    save_path = os.path.join(outputs_dir, f"{file_name}.wav")
     save_audio(save_path, istft)
 
     graph_spectrogram(stft, "stft")
