@@ -105,7 +105,7 @@ def compute_discrim_loss(
 
     # Extra metrics
     spectral_diff = 0.3 * calculate_spectral_diff(real_audio_data, fake_audio_data)
-    spectral_convergence = 0.25 * calculate_spectral_convergence_diff(
+    spectral_convergence = 0.45 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
     )
 
@@ -144,9 +144,6 @@ def train_epoch(
         z = torch.randn(batch, LATENT_DIM, 1, 1).to(device)
         fake_audio_data = generator(z)
 
-        # Generator Loss
-        g_adv_loss = criterion(discriminator(fake_audio_data).view(-1, 1), real_labels)
-
         g_loss = compute_generator_loss(
             criterion,
             discriminator,
@@ -154,7 +151,6 @@ def train_epoch(
             fake_audio_data,
             real_labels,
         )
-
         g_loss.backward(retain_graph=True)
         optimizer_G.step()
         total_g_loss += g_loss.item()
@@ -162,6 +158,7 @@ def train_epoch(
         # Train discriminator
         optimizer_D.zero_grad()
         fake_audio_data = fake_audio_data.detach()
+
         d_loss = compute_discrim_loss(
             criterion,
             discriminator,
@@ -170,7 +167,6 @@ def train_epoch(
             real_labels,
             fake_labels,
         )
-
         d_loss.backward()
         optimizer_D.step()
         total_d_loss += d_loss.item()
