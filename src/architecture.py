@@ -97,11 +97,14 @@ class Discriminator(nn.Module):
         )
 
     def extract_features(self, x):
-        feature_indices = [1, 3, 9]  # Conv block index
         features = []
         for i, layer in enumerate(self.conv_blocks):
             x = layer(x)
-            if i in feature_indices:
+            if i == 0:
+                features.append(x)
+            elif isinstance(layer, LinearAttention):
+                features.append(x)
+            elif i == len(self.conv_blocks) - 3:
                 features.append(x)
         return features
 
