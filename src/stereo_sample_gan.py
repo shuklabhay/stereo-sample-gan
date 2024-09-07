@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
+from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from architecture import (
@@ -33,9 +33,9 @@ val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 # Initialize models and optimizers
 generator = Generator()
 discriminator = Discriminator()
-criterion = nn.MSELoss()
-optimizer_G = optim.AdamW(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))  # type: ignore
-optimizer_D = optim.AdamW(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))  # type: ignore
+criterion = nn.BCEWithLogitsLoss()
+optimizer_G = AdamW(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))
+optimizer_D = AdamW(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))
 
 
 # Train

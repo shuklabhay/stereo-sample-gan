@@ -4,7 +4,7 @@ from architecture import LATENT_DIM
 from utils.file_helpers import (
     save_model,
 )
-from utils.signal_helpers import graph_spectrogram, scale_data_to_range
+from utils.signal_helpers import graph_spectrogram
 
 # Constants
 N_EPOCHS = 4
@@ -104,8 +104,8 @@ def compute_discrim_loss(
     d_adv_loss = (real_loss + fake_loss) / 2
 
     # Extra metrics
-    spectral_diff = 0.3 * calculate_spectral_diff(real_audio_data, fake_audio_data)
-    spectral_convergence = 0.45 * calculate_spectral_convergence_diff(
+    spectral_diff = 0.35 * calculate_spectral_diff(real_audio_data, fake_audio_data)
+    spectral_convergence = 0.35 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
     )
 
