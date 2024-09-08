@@ -69,9 +69,9 @@ class Generator(nn.Module):
         return x
 
 
-class Discriminator(nn.Module):
+class Critic(nn.Module):
     def __init__(self):
-        super(Discriminator, self).__init__()
+        super(Critic, self).__init__()
         self.conv_blocks = nn.Sequential(
             spectral_norm(nn.Conv2d(N_CHANNELS, 4, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
@@ -93,19 +93,17 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(128),
             spectral_norm(nn.Conv2d(128, 1, kernel_size=4, stride=1, padding=0)),
             nn.Flatten(),
-            nn.Sigmoid(),
         )
 
     def extract_features(self, x):
-        features = []
-        for i, layer in enumerate(self.conv_blocks):
-            x = layer(x)
-            if i == 0:
-                features.append(x)
-            elif isinstance(layer, LinearAttention):
-                features.append(x)
-            elif i == len(self.conv_blocks) - 3:
-                features.append(x)
+        features = [
+            x
+            for i, layer in enumerate(self.conv_blocks)
+            if i == 0
+            or isinstance(layer, LinearAttention)
+            or i == len(self.conv_blocks) - 2
+        ]
+
         return features
 
     def forward(self, x):

@@ -1,11 +1,10 @@
 import torch
-import torch.nn as nn
-from torch.optim.adamw import AdamW
+from torch.optim.rmsprop import RMSprop
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from architecture import (
     BATCH_SIZE,
-    Discriminator,
+    Critic,
     Generator,
 )
 from train import training_loop
@@ -16,8 +15,8 @@ from utils.file_helpers import (
 )
 
 # Constants
-LR_G = 0.004
-LR_D = 0.005
+LR_G = 0.003
+LR_C = 0.004
 
 # Load data
 all_spectrograms = load_loudness_data(compiled_data_path)
@@ -32,25 +31,21 @@ val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 # Initialize models and optimizers
 generator = Generator()
-discriminator = Discriminator()
-criterion = nn.BCEWithLogitsLoss()
-optimizer_G = AdamW(generator.parameters(), lr=LR_G, betas=(0.5, 0.999))
-optimizer_D = AdamW(discriminator.parameters(), lr=LR_D, betas=(0.5, 0.999))
+critic = Critic()
+optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.01)
+optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.01)
 
 
 # Train
 device = get_device()
 generator.to(device)
-discriminator.to(device)
-
-
+critic.to(device)
 training_loop(
     generator,
-    discriminator,
+    critic,
     train_loader,
     val_loader,
-    criterion,
     optimizer_G,
-    optimizer_D,
+    optimizer_C,
     device,
 )
