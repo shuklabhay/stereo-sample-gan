@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 from architecture import LATENT_DIM
 from utils.file_helpers import (
     save_model,
@@ -7,7 +6,7 @@ from utils.file_helpers import (
 from utils.signal_helpers import graph_spectrogram
 
 # Constants
-N_EPOCHS = 6
+N_EPOCHS = 4
 VALIDATION_INTERVAL = 1
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 

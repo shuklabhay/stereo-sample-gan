@@ -32,8 +32,8 @@ val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 # Initialize models and optimizers
 generator = Generator()
 critic = Critic()
-optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.01)
-optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.01)
+optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.05)
+optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.05)
 
 
 # Train
