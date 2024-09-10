@@ -6,6 +6,8 @@ Continuation of UCLA COSMOS 2024 Research
 
 ## basically yeah rewrite eveyrthing with the idea of this is happening for multiple types of audio and generative network for many kinds of audio
 
+Lightweight approach to generating stero audio without sacrificing quality
+
 note that sample = nosies and drum instrumental things
 note somewhere that like this is less for speech generation and more for like generating synths or samples or sounds. the novel thing is it uses 2 channels to generate w/ gan. like in theory it can learn to create one phrase again and again and again but not tested bc data constraints, sample gan. genrated audio samples.
 

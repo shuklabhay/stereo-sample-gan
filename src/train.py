@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 from architecture import LATENT_DIM
 from utils.file_helpers import (
     save_model,
@@ -11,21 +10,62 @@ N_EPOCHS = 4
 VALIDATION_INTERVAL = 1
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
-
-# Train Utility
-def smooth_labels(tensor):
-    amount = 0.02
-
-    if tensor[0] == 1:
-        return tensor + amount * torch.rand_like(tensor)
-    else:
-        return tensor - amount * torch.rand_like(tensor)
+LAMBDA_GP = 5
+N_CRITIC = 5
 
 
-# Generator Loss Metrics
-def calculate_feature_match_diff(discriminator, real_audio_data, fake_audio_data):
-    real_features = discriminator.extract_features(real_audio_data)
-    fake_features = discriminator.extract_features(fake_audio_data)
+# Total loss functions
+def compute_g_loss(critic, fake_validity, fake_audio_data, real_audio_data):
+    feat_match = 0.25 * calculate_feature_match_diff(
+        critic, real_audio_data, fake_audio_data
+    )
+
+    computed_g_loss = (
+        # Force vertical
+        -torch.mean(fake_validity)
+        + feat_match
+    )
+    return computed_g_loss
+
+
+def compute_c_loss(
+    critic,
+    fake_validity,
+    real_validity,
+    fake_audio_data,
+    real_audio_data,
+    training,
+    device,
+):
+    spectral_diff = 0.15 * calculate_spectral_diff(real_audio_data, fake_audio_data)
+    spectral_convergence = 0.15 * calculate_spectral_convergence_diff(
+        real_audio_data, fake_audio_data
+    )
+
+    computed_c_loss = (
+        torch.mean(fake_validity)
+        - torch.mean(real_validity)
+        + spectral_diff
+        + spectral_convergence
+    )
+
+    if training:
+        gradient_penalty = compute_gradient_penalty(
+            critic, real_audio_data, fake_audio_data, device
+        )
+        computed_c_loss += LAMBDA_GP * gradient_penalty
+
+    return computed_c_loss
+
+
+# Loss Metrics
+def compute_wasserstein_distance(real_validity, fake_validity):
+    return torch.mean(real_validity) - torch.mean(fake_validity)
+
+
+def calculate_feature_match_diff(critic, real_audio_data, fake_audio_data):
+    real_features = critic.extract_features(real_audio_data)
+    fake_features = critic.extract_features(fake_audio_data)
 
     loss = 0
     for real_feat, fake_feat in zip(real_features, fake_features):
@@ -34,220 +74,153 @@ def calculate_feature_match_diff(discriminator, real_audio_data, fake_audio_data
     return loss / len(real_features)
 
 
-def calculate_relative_smoothness(real_spectrograms, generated_spectrograms):
-    def smoothness(spectrogram):
-        time_diff = torch.diff(spectrogram, dim=2)
-        freq_diff = torch.diff(spectrogram, dim=3)
-        smoothness = torch.mean(torch.abs(time_diff)) + torch.mean(torch.abs(freq_diff))
-
-        return smoothness
-
-    real_smoothness = smoothness(real_spectrograms)
-    generated_smoothness = smoothness(generated_spectrograms)
-
-    penalty = F.relu(generated_smoothness - real_smoothness)
-    return penalty
-
-
-def compute_generator_loss(
-    criterion,
-    discriminator,
-    real_audio_data,
-    fake_audio_data,
-    real_labels,
-):
-    # Adv Loss
-    g_adv_loss = criterion(discriminator(fake_audio_data).view(-1, 1), real_labels)
-
-    # Extra metrics
-    feat_match = 0.45 * calculate_feature_match_diff(
-        discriminator, real_audio_data, fake_audio_data
-    )
-    relative_smoothness = 0.2 * calculate_relative_smoothness(
-        real_audio_data, fake_audio_data
-    )
-
-    g_loss = (
-        # Force vertical
-        g_adv_loss
-        + feat_match  # compare features at layers
-        # + relative_smoothness  # compare random periodic stuff
-    )
-    return g_loss
-
-
-# Discriminator Loss Metrics
 def calculate_spectral_diff(real_audio_data, fake_audio_data):
-    spectral_diff = torch.mean(torch.abs(real_audio_data - fake_audio_data))
-
-    return torch.mean(spectral_diff)
+    return torch.mean(torch.abs(real_audio_data - fake_audio_data))
 
 
 def calculate_spectral_convergence_diff(real_audio_data, fake_audio_data):
     numerator = torch.norm(fake_audio_data - real_audio_data, p=2)
     denominator = torch.norm(real_audio_data, p=2) + 1e-8
-
     return numerator / denominator
 
 
-def compute_discrim_loss(
-    criterion,
-    discriminator,
-    real_audio_data,
-    fake_audio_data,
-    real_labels,
-    fake_labels,
-):
-    # Adv Loss
-    real_loss = criterion(discriminator(real_audio_data).view(-1, 1), real_labels)
-    fake_loss = criterion(discriminator(fake_audio_data).view(-1, 1), fake_labels)
-    d_adv_loss = (real_loss + fake_loss) / 2
+def compute_gradient_penalty(critic, real_samples, fake_samples, device):
+    real_samples.requires_grad_(True)
+    fake_samples.requires_grad_(True)
 
-    # Extra metrics
-    spectral_diff = 0.35 * calculate_spectral_diff(real_audio_data, fake_audio_data)
-    spectral_convergence = 0.35 * calculate_spectral_convergence_diff(
-        real_audio_data, fake_audio_data
+    alpha = torch.rand(real_samples.size(0), 1, 1, 1).to(device)
+    interpolates = (alpha * real_samples + (1 - alpha) * fake_samples).requires_grad_(
+        True
     )
-
-    d_loss = (
-        # Force vertical
-        d_adv_loss
-        + spectral_diff  # compare differences
-        + spectral_convergence  # compare shape similarities
-    )
-    return d_loss
+    c_interpolates = critic(interpolates)
+    fake = torch.ones(real_samples.size(0), 1).to(device)
+    gradients = torch.autograd.grad(
+        outputs=c_interpolates,
+        inputs=interpolates,
+        grad_outputs=fake,
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True,
+    )[0]
+    gradients = gradients.view(gradients.size(0), -1)
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    return gradient_penalty
 
 
 # Training
-def train_epoch(
-    generator,
-    discriminator,
-    dataloader,
-    criterion,
-    optimizer_G,
-    optimizer_D,
-    device,
-):
+def train_epoch(generator, critic, dataloader, optimizer_G, optimizer_C, device):
     generator.train()
-    discriminator.train()
-    total_g_loss, total_d_loss = 0, 0
+    critic.train()
+    total_g_loss, total_c_loss = 0, 0
 
     for i, (real_audio_data,) in enumerate(dataloader):
         batch = real_audio_data.size(0)
         real_audio_data = real_audio_data.to(device)
 
-        real_labels = smooth_labels((torch.ones(batch, 1)).to(device))
-        fake_labels = smooth_labels((torch.zeros(batch, 1)).to(device))
-
-        # Train generator
-        optimizer_G.zero_grad()
+        # Train critic
+        optimizer_C.zero_grad()
         z = torch.randn(batch, LATENT_DIM, 1, 1).to(device)
         fake_audio_data = generator(z)
 
-        g_loss = compute_generator_loss(
-            criterion,
-            discriminator,
-            real_audio_data,
+        real_validity = critic(real_audio_data)
+        fake_validity = critic(fake_audio_data.detach())
+
+        c_loss = compute_c_loss(
+            critic,
+            fake_validity,
+            real_validity,
             fake_audio_data,
-            real_labels,
-        )
-        g_loss.backward(retain_graph=True)
-        optimizer_G.step()
-        total_g_loss += g_loss.item()
-
-        # Train discriminator
-        optimizer_D.zero_grad()
-        fake_audio_data = fake_audio_data.detach()
-
-        d_loss = compute_discrim_loss(
-            criterion,
-            discriminator,
             real_audio_data,
-            fake_audio_data,
-            real_labels,
-            fake_labels,
+            True,
+            device,
         )
-        d_loss.backward()
-        optimizer_D.step()
-        total_d_loss += d_loss.item()
 
-    return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
+        c_loss.backward()
+        optimizer_C.step()
+
+        total_c_loss += c_loss.item()
+
+        # Train generator every n_critic steps
+        if i % N_CRITIC == 0:
+            optimizer_G.zero_grad()
+            fake_audio_data = generator(z)
+            fake_validity = critic(fake_audio_data)
+
+            g_loss = compute_g_loss(
+                critic, fake_validity, fake_audio_data, real_audio_data
+            )
+
+            g_loss.backward()
+            optimizer_G.step()
+
+            total_g_loss += g_loss.item()
+
+    return total_g_loss / len(dataloader), total_c_loss / len(dataloader)
 
 
-def validate(generator, discriminator, dataloader, criterion, device):
+def validate(generator, critic, dataloader, device):
     generator.eval()
-    discriminator.eval()
-    total_g_loss, total_d_loss = 0, 0
+    critic.eval()
+    total_g_loss, total_c_loss = 0, 0
 
     with torch.no_grad():
         for (real_audio_data,) in dataloader:
             batch = real_audio_data.size(0)
             real_audio_data = real_audio_data.to(device)
 
-            real_labels = torch.ones(batch, 1).to(device)
-            fake_labels = torch.zeros(batch, 1).to(device)
-
             z = torch.randn(batch, LATENT_DIM, 1, 1).to(device)
             fake_audio_data = generator(z)
 
-            g_loss = compute_generator_loss(
-                criterion,
-                discriminator,
-                real_audio_data,
-                fake_audio_data,
-                real_labels,
-            )
-            total_g_loss += g_loss.item()
-            d_loss = compute_discrim_loss(
-                criterion,
-                discriminator,
-                real_audio_data,
-                fake_audio_data,
-                real_labels,
-                fake_labels,
-            )
-            total_d_loss += d_loss.item()
+            real_validity = critic(real_audio_data)
+            fake_validity = critic(fake_audio_data)
 
-    return total_g_loss / len(dataloader), total_d_loss / len(dataloader)
+            g_loss = compute_g_loss(
+                critic, fake_validity, fake_audio_data, real_audio_data
+            )
+            c_loss = compute_c_loss(
+                critic,
+                fake_validity,
+                real_validity,
+                fake_audio_data,
+                real_audio_data,
+                False,
+                device,
+            )
+
+            total_g_loss += g_loss.item()
+            total_c_loss += c_loss.item()
+
+    return total_g_loss / len(dataloader), total_c_loss / len(dataloader)
 
 
 def training_loop(
-    generator,
-    discriminator,
-    train_loader,
-    val_loader,
-    criterion,
-    optimizer_G,
-    optimizer_D,
-    device,
+    generator, critic, train_loader, val_loader, optimizer_G, optimizer_C, device
 ):
     for epoch in range(N_EPOCHS):
-        train_g_loss, train_d_loss = train_epoch(
+        train_g_loss, train_c_loss = train_epoch(
             generator,
-            discriminator,
+            critic,
             train_loader,
-            criterion,
             optimizer_G,
-            optimizer_D,
+            optimizer_C,
             device,
         )
 
         print(
-            f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, D Loss: {train_d_loss:.6f}"
+            f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}"
         )
 
         # Validate periodically
         if (epoch + 1) % VALIDATION_INTERVAL == 0:
-            val_g_loss, val_d_loss = validate(
-                generator, discriminator, val_loader, criterion, device
-            )
+            val_g_loss, val_c_loss = validate(generator, critic, val_loader, device)
             print(
-                f"------ Val ------ G Loss: {val_g_loss:.6f}, D Loss: {val_d_loss:.6f}"
+                f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}"
             )
 
             examples_to_generate = 3
             z = torch.randn(examples_to_generate, LATENT_DIM, 1, 1).to(device)
             generated_audio = generator(z).squeeze()
+
             for i in range(examples_to_generate):
                 generated_audio_np = generated_audio[i].cpu().detach().numpy()
                 graph_spectrogram(
@@ -257,4 +230,4 @@ def training_loop(
 
         # Save models periodically
         if (epoch + 1) % SAVE_INTERVAL == 0:
-            save_model(generator, "StereoSampleGAN-Kick", True)
+            save_model(generator, "StereoSampleGAN-Kick")
