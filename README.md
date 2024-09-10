@@ -1,6 +1,6 @@
 # StereoSampleGAN (WIP)
 
-[![On Push](https://github.com/shuklabhay/stereosamplegan/actions/workflows/push.yml/badge.svg)](https://github.com/shuklabhay/stereosamplegan/actions/workflows/push.yml/badge.svg)
+[![On Push](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)
 
 StereoSampleGAN: A lightweight approach high fidelity stereo audio sample generation. Generate a kick drum by running `generate.py`.
 
