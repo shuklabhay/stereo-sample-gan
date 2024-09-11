@@ -61,7 +61,8 @@ def norm_db_to_audio(loudness_info):
 
         stereo_audio.append(istft)
 
-    return np.array(stereo_audio)  # OUT: Audio information
+    stereo_audio = np.array(stereo_audio)
+    return stereo_audio  # OUT: Audio information
 
 
 def griffin_lim_istft(channel_magnitudes):

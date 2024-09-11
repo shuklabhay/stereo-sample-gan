@@ -27,3 +27,4 @@ audio_info = norm_db_to_audio(generated_output)
 audio_save_path = os.path.join(outputs_dir, "generated_audio.wav")
 
 save_audio(audio_save_path, audio_info)
+# make sure istft isnt the source of the noise :()

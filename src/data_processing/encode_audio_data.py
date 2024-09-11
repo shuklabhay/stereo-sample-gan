@@ -13,7 +13,7 @@ from utils.signal_helpers import encode_sample_directory
 
 # Encode samples
 if len(sys.argv) > 1:
-    visualize = sys.argv[1].lower() == "true"
+    visualize = sys.argv[1].lower() == "visualize"
 else:
     visualize = False
 
