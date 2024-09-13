@@ -4,6 +4,7 @@ import os
 import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
+from scipy.signal import convolve2d
 
 from utils.file_helpers import (
     GLOBAL_SR,
@@ -53,21 +54,21 @@ def audio_to_norm_db(channel_info):
 def norm_db_to_audio(loudness_info):
     # IN: Frames, Freq Bins in norm dB
     stereo_audio = []
-
     for i in range(N_CHANNELS):
         data = scale_data_to_range(loudness_info[i], -40, 40)
         magnitudes = librosa.db_to_amplitude(data)
         istft = griffin_lim_istft(magnitudes)
-
         stereo_audio.append(istft)
 
     stereo_audio = np.array(stereo_audio)
-    return stereo_audio  # OUT: Audio information
+
+    return stereo_audio
 
 
 def griffin_lim_istft(channel_magnitudes):
-    iterations = 5
-    momentum = 0.3
+    iterations = 10
+    momentum = 0.99
+
     angles = np.exp(2j * np.pi * np.random.rand(*channel_magnitudes.shape))
     stft = channel_magnitudes.astype(np.complex64) * angles
 
@@ -97,8 +98,14 @@ def griffin_lim_istft(channel_magnitudes):
             pad_mode="linear_ramp",
         )
 
-        stft = stft[:DATA_SHAPE, :DATA_SHAPE]
-        angles = np.exp(1j * np.angle(stft.T))
+        stft = stft[:DATA_SHAPE, :DATA_SHAPE]  # preserve shape
+        stft = noise_spectral_mask(stft)  # mitigate noise
+        new_angles = np.exp(1j * np.angle(stft.T))
+
+        # phase decay
+        phase_decay = 1 - (i / iterations)
+        angles = phase_decay * angles + (1 - phase_decay) * new_angles
+        stft = channel_magnitudes * angles
 
     complex_istft = librosa.istft(
         (channel_magnitudes * angles).T,
@@ -111,7 +118,7 @@ def griffin_lim_istft(channel_magnitudes):
     return complex_istft
 
 
-# Data Helpers
+# Audio Helpers
 def load_audio(path):
     y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
     if y.ndim == 1:
@@ -146,6 +153,33 @@ def scale_data_to_range(data, new_min, new_max):
     scaled_data = np.round(scaled_data, decimals=6)
 
     return scaled_data
+
+
+def noise_spectral_mask(channel_magnitudes):
+    # Parameters
+    n_std = 2.0
+    time_smoothing = 15
+    freq_smoothing = 6  #
+
+    # Estimate noise profile
+    noise_profile = np.mean(channel_magnitudes[:, -20:], axis=1)
+    noise_std = np.std(channel_magnitudes[:, -20:], axis=1)
+
+    # Apply 2D smoothing
+    time_filter = np.ones((1, time_smoothing)) / time_smoothing
+    freq_filter = np.ones((freq_smoothing, 1)) / freq_smoothing
+    smoothing_filter = np.outer(freq_filter, time_filter)
+    smoothed_magnitudes = convolve2d(
+        channel_magnitudes, smoothing_filter, mode="same", boundary="symm"
+    )
+
+    # Apply thresholding
+    threshold = noise_profile[:, np.newaxis] + n_std * noise_std[:, np.newaxis]
+    mask = smoothed_magnitudes > threshold
+
+    gain = np.where(mask, 1 - threshold / (smoothed_magnitudes + 1e-10), 0)
+
+    return channel_magnitudes * gain
 
 
 # Validation helpers
