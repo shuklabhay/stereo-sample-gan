@@ -54,8 +54,10 @@ def audio_to_norm_db(channel_info):
 def norm_db_to_audio(loudness_info):
     # IN: Frames, Freq Bins in norm dB
     stereo_audio = []
+
     for i in range(N_CHANNELS):
         data = scale_data_to_range(loudness_info[i], -40, 40)
+        data[data < -38] = -40  # Noise gate
         magnitudes = librosa.db_to_amplitude(data)
         istft = griffin_lim_istft(magnitudes)
         stereo_audio.append(istft)
@@ -99,13 +101,10 @@ def griffin_lim_istft(channel_magnitudes):
         )
 
         stft = stft[:DATA_SHAPE, :DATA_SHAPE]  # preserve shape
-        stft = noise_spectral_mask(stft)  # mitigate noise
+        # stft = noise_spectral_mask(stft)  # mask noise
         new_angles = np.exp(1j * np.angle(stft.T))
 
-        # phase decay
-        phase_decay = 1 - (i / iterations)
-        angles = phase_decay * angles + (1 - phase_decay) * new_angles
-        stft = channel_magnitudes * angles
+        stft = channel_magnitudes * new_angles
 
     complex_istft = librosa.istft(
         (channel_magnitudes * angles).T,
