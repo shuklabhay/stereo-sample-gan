@@ -10,7 +10,7 @@ from utils.signal_helpers import graph_spectrogram
 
 # Constants
 N_EPOCHS = 6
-VALIDATION_INTERVAL = 1
+VALIDATION_INTERVAL = 2
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 LAMBDA_GP = 5
@@ -46,8 +46,7 @@ def compute_c_loss(
     )
 
     computed_c_loss = (
-        torch.mean(fake_validity)
-        - torch.mean(real_validity)
+        -(torch.mean(real_validity) - torch.mean(fake_validity))
         + spectral_diff
         + spectral_convergence
     )
