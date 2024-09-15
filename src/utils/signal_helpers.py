@@ -57,7 +57,7 @@ def norm_db_to_audio(loudness_info):
 
     for i in range(N_CHANNELS):
         data = scale_data_to_range(loudness_info[i], -40, 40)
-        data[data < -38] = -40  # Noise gate
+        data[data < -35] = -40  # Noise gate
         magnitudes = librosa.db_to_amplitude(data)
         istft = griffin_lim_istft(magnitudes)
         stereo_audio.append(istft)
@@ -101,11 +101,11 @@ def griffin_lim_istft(channel_magnitudes):
         )
 
         stft = stft[:DATA_SHAPE, :DATA_SHAPE]  # preserve shape
-        # stft = noise_spectral_mask(stft)  # mask noise
         new_angles = np.exp(1j * np.angle(stft.T))
 
         stft = channel_magnitudes * new_angles
 
+    channel_magnitudes[channel_magnitudes < 0.05] = 0  # Noise gate
     complex_istft = librosa.istft(
         (channel_magnitudes * angles).T,
         hop_length=GLOBAL_HOP,
@@ -152,33 +152,6 @@ def scale_data_to_range(data, new_min, new_max):
     scaled_data = np.round(scaled_data, decimals=6)
 
     return scaled_data
-
-
-def noise_spectral_mask(channel_magnitudes):
-    # Parameters
-    n_std = 2.0
-    time_smoothing = 15
-    freq_smoothing = 6  #
-
-    # Estimate noise profile
-    noise_profile = np.mean(channel_magnitudes[:, -20:], axis=1)
-    noise_std = np.std(channel_magnitudes[:, -20:], axis=1)
-
-    # Apply 2D smoothing
-    time_filter = np.ones((1, time_smoothing)) / time_smoothing
-    freq_filter = np.ones((freq_smoothing, 1)) / freq_smoothing
-    smoothing_filter = np.outer(freq_filter, time_filter)
-    smoothed_magnitudes = convolve2d(
-        channel_magnitudes, smoothing_filter, mode="same", boundary="symm"
-    )
-
-    # Apply thresholding
-    threshold = noise_profile[:, np.newaxis] + n_std * noise_std[:, np.newaxis]
-    mask = smoothed_magnitudes > threshold
-
-    gain = np.where(mask, 1 - threshold / (smoothed_magnitudes + 1e-10), 0)
-
-    return channel_magnitudes * gain
 
 
 # Validation helpers
