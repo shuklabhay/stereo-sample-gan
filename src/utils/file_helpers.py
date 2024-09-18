@@ -24,13 +24,7 @@ def save_audio(save_path, audio):
     sf.write(save_path, audio.T, GLOBAL_SR)
 
 
-def save_model(model, name, preserve_old=False):
-    # Clear previous models
-    if preserve_old is not True:
-        for filename in os.listdir(outputs_dir):
-            file_path = os.path.join(outputs_dir, filename)
-            os.remove(file_path)
-
+def save_model(model, name):
     # Save model
     torch.save(
         model.state_dict(),

@@ -258,6 +258,6 @@ def training_loop(train_loader, val_loader):
                     f"Epoch {epoch + 1} Generated Audio #{i + 1}",
                 )
 
-        # Save models periodically
+        # Save model
         if (epoch + 1) % SAVE_INTERVAL == 0:
             save_model(generator, "StereoSampleGAN-Kick")
