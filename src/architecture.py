@@ -45,20 +45,20 @@ class Generator(nn.Module):
         self.deconv_blocks = nn.Sequential(
             nn.ConvTranspose2d(LATENT_DIM, 128, kernel_size=4, stride=1, padding=0),
             nn.BatchNorm2d(128),
-            nn.ReLU(),  # Shape: (BATCH_SIZE, 128, 4, 4)
+            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 128, 4, 4)
             nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(64),
-            nn.ReLU(),  # Shape: (BATCH_SIZE, 64, 8, 8)
+            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 64, 8, 8)
             nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
             # LinearAttention(32),
             nn.BatchNorm2d(32),
-            nn.ReLU(),  # Shape: (BATCH_SIZE, 32, 16, 16)
+            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 32, 16, 16)
             nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(16),
-            nn.ReLU(),  # Shape: (BATCH_SIZE, 16, 32, 32)
+            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 16, 32, 32)
             nn.ConvTranspose2d(16, 8, kernel_size=6, stride=4, padding=1),
             nn.BatchNorm2d(8),
-            nn.ReLU(),  # Shape: (BATCH_SIZE, 8, 128, 128)
+            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 8, 128, 128)
             nn.ConvTranspose2d(8, N_CHANNELS, kernel_size=6, stride=2, padding=2),
             # Shape: (BATCH_SIZE, N_CHANNELS, 256, 256)
             nn.Tanh(),

@@ -9,7 +9,7 @@ from utils.file_helpers import (
 from utils.signal_helpers import graph_spectrogram
 
 # Constants
-N_EPOCHS = 6
+N_EPOCHS = 8
 VALIDATION_INTERVAL = 2
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
@@ -17,7 +17,7 @@ LAMBDA_GP = 5
 CRITIC_STEPS = 5
 
 
-# Total loss functions
+# Loss metrics
 def compute_g_loss(critic, fake_validity, fake_audio_data, real_audio_data):
     feat_match = 0.35 * calculate_feature_match_diff(
         critic, real_audio_data, fake_audio_data
@@ -52,7 +52,7 @@ def compute_c_loss(
     )
 
     if training:
-        gradient_penalty = compute_gradient_penalty(
+        gradient_penalty = calculate_gradient_penalty(
             critic, real_audio_data, fake_audio_data, device
         )
         computed_c_loss += LAMBDA_GP * gradient_penalty
@@ -86,7 +86,7 @@ def calculate_spectral_convergence_diff(real_audio_data, fake_audio_data):
     return numerator / denominator
 
 
-def compute_gradient_penalty(critic, real_samples, fake_samples, device):
+def calculate_gradient_penalty(critic, real_samples, fake_samples, device):
     real_samples.requires_grad_(True)
     fake_samples.requires_grad_(True)
 
@@ -259,5 +259,7 @@ def training_loop(train_loader, val_loader):
                 )
 
         # Save model
-        if (epoch + 1) % SAVE_INTERVAL == 0:
+        if (epoch + 1) % SAVE_INTERVAL == 0 or train_g_loss <= 0.2:
+            print(f"Training stopped at epoch {epoch+1}, g_loss: {train_g_loss:.6f}")
             save_model(generator, "StereoSampleGAN-Kick")
+            break

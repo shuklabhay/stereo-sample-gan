@@ -1,12 +1,8 @@
 import torch
-from torch.optim.rmsprop import RMSprop
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from architecture import (
     BATCH_SIZE,
-    Critic,
-    Generator,
 )
 from train import training_loop
 from utils.file_helpers import (
