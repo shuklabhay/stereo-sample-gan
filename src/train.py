@@ -1,22 +1,28 @@
 import torch
-from architecture import LATENT_DIM
+from architecture import LATENT_DIM, Critic, Generator
+import numpy as np
+from torch.optim.rmsprop import RMSprop
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.file_helpers import (
+    get_device,
     save_model,
 )
 from utils.signal_helpers import graph_spectrogram
 
 # Constants
-N_EPOCHS = 4
-VALIDATION_INTERVAL = 1
+N_EPOCHS = 8
+VALIDATION_INTERVAL = 4
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
+LR_G = 0.003
+LR_C = 0.004
 LAMBDA_GP = 5
-N_CRITIC = 5
+CRITIC_STEPS = 5
 
 
-# Total loss functions
+# Loss metrics
 def compute_g_loss(critic, fake_validity, fake_audio_data, real_audio_data):
-    feat_match = 0.25 * calculate_feature_match_diff(
+    feat_match = 0.35 * calculate_feature_match_diff(
         critic, real_audio_data, fake_audio_data
     )
 
@@ -43,14 +49,13 @@ def compute_c_loss(
     )
 
     computed_c_loss = (
-        torch.mean(fake_validity)
-        - torch.mean(real_validity)
+        -(torch.mean(real_validity) - torch.mean(fake_validity))
         + spectral_diff
         + spectral_convergence
     )
 
     if training:
-        gradient_penalty = compute_gradient_penalty(
+        gradient_penalty = calculate_gradient_penalty(
             critic, real_audio_data, fake_audio_data, device
         )
         computed_c_loss += LAMBDA_GP * gradient_penalty
@@ -84,7 +89,7 @@ def calculate_spectral_convergence_diff(real_audio_data, fake_audio_data):
     return numerator / denominator
 
 
-def compute_gradient_penalty(critic, real_samples, fake_samples, device):
+def calculate_gradient_penalty(critic, real_samples, fake_samples, device):
     real_samples.requires_grad_(True)
     fake_samples.requires_grad_(True)
 
@@ -108,7 +113,16 @@ def compute_gradient_penalty(critic, real_samples, fake_samples, device):
 
 
 # Training
-def train_epoch(generator, critic, dataloader, optimizer_G, optimizer_C, device):
+def train_epoch(
+    generator,
+    critic,
+    dataloader,
+    optimizer_G,
+    optimizer_C,
+    scheduler_G,
+    scheduler_C,
+    device,
+):
     generator.train()
     critic.train()
     total_g_loss, total_c_loss = 0, 0
@@ -121,7 +135,6 @@ def train_epoch(generator, critic, dataloader, optimizer_G, optimizer_C, device)
         optimizer_C.zero_grad()
         z = torch.randn(batch, LATENT_DIM, 1, 1).to(device)
         fake_audio_data = generator(z)
-
         real_validity = critic(real_audio_data)
         fake_validity = critic(fake_audio_data.detach())
 
@@ -134,14 +147,13 @@ def train_epoch(generator, critic, dataloader, optimizer_G, optimizer_C, device)
             True,
             device,
         )
-
         c_loss.backward()
         optimizer_C.step()
 
         total_c_loss += c_loss.item()
 
-        # Train generator every n_critic steps
-        if i % N_CRITIC == 0:
+        # Train generator every CRITIC_STEPS steps
+        if i % CRITIC_STEPS == 0:
             optimizer_G.zero_grad()
             fake_audio_data = generator(z)
             fake_validity = critic(fake_audio_data)
@@ -149,13 +161,18 @@ def train_epoch(generator, critic, dataloader, optimizer_G, optimizer_C, device)
             g_loss = compute_g_loss(
                 critic, fake_validity, fake_audio_data, real_audio_data
             )
-
             g_loss.backward()
             optimizer_G.step()
 
             total_g_loss += g_loss.item()
 
-    return total_g_loss / len(dataloader), total_c_loss / len(dataloader)
+    avg_g_loss = total_g_loss / len(dataloader)
+    avg_c_loss = total_c_loss / len(dataloader)
+
+    scheduler_G.step(avg_g_loss)
+    scheduler_C.step(avg_c_loss)
+
+    return avg_g_loss, avg_c_loss
 
 
 def validate(generator, critic, dataloader, device):
@@ -193,9 +210,20 @@ def validate(generator, critic, dataloader, device):
     return total_g_loss / len(dataloader), total_c_loss / len(dataloader)
 
 
-def training_loop(
-    generator, critic, train_loader, val_loader, optimizer_G, optimizer_C, device
-):
+def training_loop(train_loader, val_loader):
+    # Initialize models and optimizers
+    generator = Generator()
+    critic = Critic()
+    optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.05)
+    optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.05)
+
+    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.5, patience=5)
+    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.5, patience=5)
+
+    # Train
+    device = get_device()
+    generator.to(device)
+    critic.to(device)
     for epoch in range(N_EPOCHS):
         train_g_loss, train_c_loss = train_epoch(
             generator,
@@ -203,6 +231,8 @@ def training_loop(
             train_loader,
             optimizer_G,
             optimizer_C,
+            scheduler_G,
+            scheduler_C,
             device,
         )
 
@@ -210,8 +240,11 @@ def training_loop(
             f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}"
         )
 
-        # Validate periodically
-        if (epoch + 1) % VALIDATION_INTERVAL == 0:
+        # Validation and saving
+        early_exit_loss_thresh = 0.2
+        early_exit_condition = np.abs(train_g_loss) <= early_exit_loss_thresh
+
+        if (epoch + 1) % VALIDATION_INTERVAL == 0 or early_exit_condition is True:
             val_g_loss, val_c_loss = validate(generator, critic, val_loader, device)
             print(
                 f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}"
@@ -228,6 +261,10 @@ def training_loop(
                     f"Epoch {epoch + 1} Generated Audio #{i + 1}",
                 )
 
-        # Save models periodically
-        if (epoch + 1) % SAVE_INTERVAL == 0:
+        # Save model
+        if (epoch + 1) % SAVE_INTERVAL == 0 or early_exit_condition is True:
+            print(
+                f"Training stopped at epoch {epoch+1}, Final g_loss: {train_g_loss:.6f}"
+            )
             save_model(generator, "StereoSampleGAN-Kick")
+            break

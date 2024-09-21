@@ -1,11 +1,8 @@
 import torch
-from torch.optim.rmsprop import RMSprop
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from architecture import (
     BATCH_SIZE,
-    Critic,
-    Generator,
 )
 from train import training_loop
 from utils.file_helpers import (
@@ -29,23 +26,6 @@ train_dataset, val_dataset = random_split(
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-# Initialize models and optimizers
-generator = Generator()
-critic = Critic()
-optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.05)
-optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.05)
-
 
 # Train
-device = get_device()
-generator.to(device)
-critic.to(device)
-training_loop(
-    generator,
-    critic,
-    train_loader,
-    val_loader,
-    optimizer_G,
-    optimizer_C,
-    device,
-)
+training_loop(train_loader, val_loader)

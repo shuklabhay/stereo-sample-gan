@@ -74,6 +74,8 @@ two foundational changes to making task happen with deep conv: discrimiator real
 
 This model seeks to replicate a DCGAN's multi-channel image generation capabilities[1] to create varied two channel audio representations.
 
+I WAS FACING THE LONG RANGE DEPENDENCY PROBLEM, IT DIDNT LEARN THE OVERALL TREND AND USING ATTENION FIXED IT. good realization ig idk, mention it here tho like attention specificallyt fixed this
+
 ### 4.2. Training
 
 This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16.

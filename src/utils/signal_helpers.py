@@ -4,6 +4,7 @@ import os
 import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
+from scipy.signal import convolve2d
 
 from utils.file_helpers import (
     GLOBAL_SR,
@@ -56,17 +57,20 @@ def norm_db_to_audio(loudness_info):
 
     for i in range(N_CHANNELS):
         data = scale_data_to_range(loudness_info[i], -40, 40)
+        data[data < -35] = -40  # Noise gate
         magnitudes = librosa.db_to_amplitude(data)
         istft = griffin_lim_istft(magnitudes)
-
         stereo_audio.append(istft)
 
-    return np.array(stereo_audio)  # OUT: Audio information
+    stereo_audio = np.array(stereo_audio)
+
+    return stereo_audio
 
 
 def griffin_lim_istft(channel_magnitudes):
-    iterations = 5
-    momentum = 0.3
+    iterations = 10
+    momentum = 0.99
+
     angles = np.exp(2j * np.pi * np.random.rand(*channel_magnitudes.shape))
     stft = channel_magnitudes.astype(np.complex64) * angles
 
@@ -96,9 +100,12 @@ def griffin_lim_istft(channel_magnitudes):
             pad_mode="linear_ramp",
         )
 
-        stft = stft[:DATA_SHAPE, :DATA_SHAPE]
-        angles = np.exp(1j * np.angle(stft.T))
+        stft = stft[:DATA_SHAPE, :DATA_SHAPE]  # preserve shape
+        new_angles = np.exp(1j * np.angle(stft.T))
 
+        stft = channel_magnitudes * new_angles
+
+    channel_magnitudes[channel_magnitudes < 0.05] = 0  # Noise gate
     complex_istft = librosa.istft(
         (channel_magnitudes * angles).T,
         hop_length=GLOBAL_HOP,
@@ -110,7 +117,7 @@ def griffin_lim_istft(channel_magnitudes):
     return complex_istft
 
 
-# Data Helpers
+# Audio Helpers
 def load_audio(path):
     y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
     if y.ndim == 1:
