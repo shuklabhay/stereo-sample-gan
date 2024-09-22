@@ -165,5 +165,6 @@ cython_debug/
 data/
 .vscode/
 .DS_Store
-generated_audio.wav
+outputs/generated_audio.wav
+outputs/generated_audio_[0-9]*
 test.wav

@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
 
-from usage.usage_specs import (
+from usage_params import (
     training_sample_length,
     outputs_dir,
 )

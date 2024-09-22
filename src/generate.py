@@ -1,12 +1,7 @@
-import sys
 import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
 import torch
 from architecture import Generator, LATENT_DIM
-from usage.usage_specs import (
+from usage_params import (
     model_to_generate_with,
     outputs_dir,
     generated_audio_name,
@@ -41,7 +36,7 @@ for i in range(audio_generation_count):
     current_sample = generated_output[i]
 
     audio_info = norm_db_to_audio(current_sample)
-    audio_save_path = os.path.join(outputs_dir, f"{generated_audio_name}-{i + 1}.wav")
+    audio_save_path = os.path.join(outputs_dir, f"{generated_audio_name}_{i + 1}.wav")
 
     save_audio(audio_save_path, audio_info)
 

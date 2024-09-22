@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import os
 import random
-from usage.usage_specs import compiled_data_path
+from usage_params import compiled_data_path
 from utils.signal_helpers import (
     stft_and_istft,
 )

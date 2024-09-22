@@ -8,7 +8,7 @@ from utils.file_helpers import (
     load_loudness_data,
 )
 from utils.signal_helpers import encode_sample_directory
-from usage.usage_specs import training_audio_dir, compiled_data_path
+from usage_params import training_audio_dir, compiled_data_path
 
 # Encode audio samples
 if len(sys.argv) > 1:

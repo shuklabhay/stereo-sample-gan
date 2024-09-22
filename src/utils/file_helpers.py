@@ -3,7 +3,7 @@ import os
 import torch
 import soundfile as sf
 
-from usage.usage_specs import model_save_path
+from usage_params import model_save_path
 
 # Constants
 GLOBAL_SR = 44100
