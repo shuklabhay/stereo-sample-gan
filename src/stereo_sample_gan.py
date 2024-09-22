@@ -1,3 +1,9 @@
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
@@ -8,8 +14,9 @@ from train import training_loop
 from utils.file_helpers import (
     get_device,
     load_loudness_data,
-    compiled_data_path,
 )
+
+from data_processing.encode_audio_data import compiled_data_path
 
 # Constants
 LR_G = 0.003

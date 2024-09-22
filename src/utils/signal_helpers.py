@@ -1,20 +1,22 @@
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 import librosa
 import numpy as np
-import os
 import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
-from scipy.signal import convolve2d
 
 from utils.file_helpers import (
     GLOBAL_SR,
     outputs_dir,
-    compiled_data_path,
     delete_DSStore,
     save_audio,
     save_loudness_data,
 )
-
 
 # Constants
 AUDIO_SAMPLE_LENGTH = 0.6  # 600 ms
@@ -126,7 +128,7 @@ def load_audio(path):
     return y
 
 
-def encode_sample_directory(sample_dir, visualize=True):
+def encode_sample_directory(sample_dir, output_dir, visualize=True):
     delete_DSStore(sample_dir)
     real_data = []
 
@@ -142,7 +144,7 @@ def encode_sample_directory(sample_dir, visualize=True):
             if visualize is True and np.random.rand() < 0.005:
                 graph_spectrogram(loudness_data, sample_name)
 
-    save_loudness_data(real_data, compiled_data_path)
+    save_loudness_data(real_data, output_dir)
 
 
 def scale_data_to_range(data, new_min, new_max):

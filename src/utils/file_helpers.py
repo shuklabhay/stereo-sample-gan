@@ -4,9 +4,6 @@ import torch
 import soundfile as sf
 
 # Constants
-audio_data_dir = "data/kick_samples"
-compiled_data_path = "data/compiled_data.npy"
-average_spectrogram_path = "data/average_spectrogram.npy"
 outputs_dir = "outputs"
 GLOBAL_SR = 44100
 
