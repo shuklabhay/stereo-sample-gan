@@ -22,7 +22,7 @@ def save_audio(save_path, audio):
     sf.write(save_path, audio.T, GLOBAL_SR)
 
 
-def save_model(model, name):
+def save_model(model):
     # Save model
     torch.save(
         model.state_dict(),

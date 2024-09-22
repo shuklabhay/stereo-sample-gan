@@ -245,6 +245,11 @@ def training_loop(train_loader, val_loader):
         early_exit_loss_thresh = 0.2
         early_exit_condition = np.abs(train_g_loss) <= early_exit_loss_thresh
 
+        if early_exit_condition is True:
+            print(
+                f"Early exit threshold hit at {epoch+1}, Final g_loss: {train_g_loss:.6f}"
+            )
+
         if (epoch + 1) % VALIDATION_INTERVAL == 0 or early_exit_condition is True:
             val_g_loss, val_c_loss = validate(generator, critic, val_loader, device)
             print(
@@ -264,8 +269,5 @@ def training_loop(train_loader, val_loader):
 
         # Save model
         if (epoch + 1) % SAVE_INTERVAL == 0 or early_exit_condition is True:
-            print(
-                f"Training stopped at epoch {epoch+1}, Final g_loss: {train_g_loss:.6f}"
-            )
-            save_model(generator, "StereoSampleGAN-Kick")
+            save_model(generator)
             break
