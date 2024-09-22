@@ -243,7 +243,9 @@ def training_loop(train_loader, val_loader):
 
         # Validation and saving
         early_exit_loss_thresh = 0.2
-        early_exit_condition = np.abs(train_g_loss) <= early_exit_loss_thresh
+        early_exit_condition = (
+            np.abs(train_g_loss) <= early_exit_loss_thresh and (epoch + 1) != N_EPOCHS
+        )
 
         if early_exit_condition is True:
             print(
