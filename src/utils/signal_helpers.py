@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
 
+from data_processing.encode_audio_data import audio_sample_length
 from utils.file_helpers import (
     GLOBAL_SR,
     outputs_dir,
@@ -19,13 +20,12 @@ from utils.file_helpers import (
 )
 
 # Constants
-AUDIO_SAMPLE_LENGTH = 0.6  # 600 ms
 N_CHANNELS = 2  # Left, right
 DATA_SHAPE = 256
 
 # STFT Helpers
 GLOBAL_WIN = 510
-GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (DATA_SHAPE - 1)
+GLOBAL_HOP = int(audio_sample_length * GLOBAL_SR) // (DATA_SHAPE - 1)
 window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
@@ -85,7 +85,7 @@ def griffin_lim_istft(channel_magnitudes):
             center=True,
         )
         y = librosa.util.fix_length(
-            y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=0
+            y, size=int(audio_sample_length * GLOBAL_SR), axis=0
         )
 
         if i > 0:
@@ -124,7 +124,7 @@ def load_audio(path):
     y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
     if y.ndim == 1:
         y = np.stack((y, y), axis=0)
-    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+    y = librosa.util.fix_length(y, size=int(audio_sample_length * GLOBAL_SR), axis=1)
     return y
 
 
@@ -194,10 +194,10 @@ def graph_spectrogram(audio_data, sample_name):
 def generate_sine_impulses(num_impulses=1, outPath="model"):
     amplitude = 1
     for i in range(num_impulses):
-        t = np.arange(0, AUDIO_SAMPLE_LENGTH, 1 / GLOBAL_SR)
+        t = np.arange(0, audio_sample_length, 1 / GLOBAL_SR)
         freq = np.random.uniform(0, 20000)
         audio_wave = amplitude * np.sin(2 * np.pi * freq * t)
-        num_samples = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR)
+        num_samples = int(audio_sample_length * GLOBAL_SR)
         audio_signal = np.zeros(num_samples)
 
         audio_wave = audio_wave[:num_samples]
