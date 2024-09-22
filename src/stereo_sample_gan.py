@@ -16,7 +16,7 @@ from utils.file_helpers import (
     load_loudness_data,
 )
 
-from data_processing.training_audio_information import compiled_data_path
+from usage.usage_specs import compiled_data_path
 
 # Constants
 LR_G = 0.003

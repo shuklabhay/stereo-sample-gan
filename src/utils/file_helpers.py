@@ -3,8 +3,9 @@ import os
 import torch
 import soundfile as sf
 
+from usage.usage_specs import model_save_path
+
 # Constants
-outputs_dir = "outputs"
 GLOBAL_SR = 44100
 
 
@@ -25,7 +26,7 @@ def save_model(model, name):
     # Save model
     torch.save(
         model.state_dict(),
-        f"{outputs_dir}/{name}.pth",
+        model_save_path,
     )
     print(f"Model Saved")
 
