@@ -15,8 +15,8 @@ StereoSampleGAN: A lightweight approach high fidelity stereo audio sample genera
 2. Generate Audio
 
 - Specify usage paramaters in `usage_params.py`
-  - For `outputs/StereoSampleGAN-DiverseKick.pth`, `training_sample_length = 0.6`
-  - For `outputs/StereoSampleGAN-Kick.pth`, `training_sample_length = 0.6`
+  - Make sure `generated_sample_length` value matches what the model was trained on
+  - See pretrained models section for more info
 - Generate audio by running `python3 generate.py`
 
 3. Train model
@@ -25,6 +25,31 @@ StereoSampleGAN: A lightweight approach high fidelity stereo audio sample genera
   - I reccomend anywhere between 4,000-8000 training examples, any multiple of 8
 - Process training data by running `python3 encode_audio_data.py`
 - Train model by running `python3 stereo_sample_gan.py`
+
+## Pretrained Models
+
+Diverse Kick Drums
+
+- Kick Drum generation model, trained on ~8000 essetially random kick drums
+- More variation between each drum sample but often noisy and exhibits artifacting.
+- `model_save_name="StereoSampleGAN-DiverseKick`
+- `training_sample_length = 0.6`
+
+Curated Kick Drums
+
+- Kick Drum generation model, trained on ~4000 curated kick drums
+- Less variation between each drum sample and less noisy.
+- `model_save_name="StereoSampleGAN-CuratedKick`
+- `training_sample_length = 0.6`
+
+- For `outputs/StereoSampleGAN-Kick.pth`, `training_sample_length = 0.6`
+
+One Shots
+
+- Instrument one shot generation model, trained on ~3000 semi-curated instrument one shots.
+- WIP
+- `model_save_name="StereoSampleGAN-InstrumentOneShot`
+- WIP
 
 ## Directories
 
