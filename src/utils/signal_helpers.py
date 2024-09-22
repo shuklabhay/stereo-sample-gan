@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
 
-from data_processing.encode_audio_data import audio_sample_length
+from data_processing.training_audio_information import audio_sample_length
 from utils.file_helpers import (
     GLOBAL_SR,
     outputs_dir,

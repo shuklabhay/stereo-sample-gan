@@ -8,6 +8,7 @@ from utils.file_helpers import (
     load_loudness_data,
 )
 from utils.signal_helpers import encode_sample_directory
+from training_audio_information import training_audio_dir, compiled_data_path
 
 # Encode audio samples
 if len(sys.argv) > 1:
@@ -15,10 +16,6 @@ if len(sys.argv) > 1:
 else:
     visualize = False
 
-
-training_audio_dir = ""  # Your training data path
-compiled_data_path = "data/compiled_data.npy"  # Your compiled data/output path
-audio_sample_length = 0.6  # 600 ms
 
 encode_sample_directory(training_audio_dir, compiled_data_path, visualize)
 
