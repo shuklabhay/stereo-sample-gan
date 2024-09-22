@@ -22,7 +22,7 @@ StereoSampleGAN: A lightweight approach high fidelity stereo audio sample genera
 3. Train model
 
 - Specify training data paramaters in `usage_params.py`
-  - I reccomend anywhere between 4,000-8000 training examples
+  - I reccomend anywhere between 4,000-8000 training examples, any multiple of 8
 - Process training data by running `python3 encode_audio_data.py`
 - Train model by running `python3 stereo_sample_gan.py`
 
