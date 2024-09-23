@@ -82,6 +82,8 @@ This work uses 80% of the dataset as training data and 20% as validation with al
 
 notes abt training losses and stuff:
 
+talk abt w_dist monitoring, w_dist exit condition, all of that
+
 mention that like for periodic penalty and stuff comparing real to fake instead of detemrining how periodic it is compared to like nothing should be smoother so it wont never make periodici only it was avoid sound qualities the real data does NOT have bc we dont want it to not be periodic bc model can misinterpret this kinda blanket rule so nudge it to be like the REAL data in terms of periodicity NOT like some kinda truly random noise just more closely macth real data- this is done with mostly all loss metrics THE IMPORTANT DISTINCTION TO TAKE NOTE OF FOR LOSS METRIC STUFF IS THAT THE LOSS FUNCTIONS ARE made to compare generated to real not generated to an arbitrary metric so it does that yeah
 
 explain the like loss shaping stuff in detail brfhufrhufruhfruhfrhufr

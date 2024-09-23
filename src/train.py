@@ -286,9 +286,9 @@ def training_loop(train_loader, val_loader):
                 )
 
         # Early exit + saving
-        early_exit_wasserstein_dist_thresh = 0.2
+        wasserstein_dist_thresh = 0.2
         early_exit_train_condition = (
-            np.abs(train_w_dist) <= early_exit_wasserstein_dist_thresh  # w_dist thresh
+            np.abs(train_w_dist) <= wasserstein_dist_thresh  # threshold met
             and (epoch + 1) != N_EPOCHS  # Not last epoch
         )
 
