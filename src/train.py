@@ -11,7 +11,7 @@ from utils.signal_helpers import graph_spectrogram
 
 
 # Constants
-N_EPOCHS = 8
+N_EPOCHS = 12
 VALIDATION_INTERVAL = 3
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
@@ -267,6 +267,7 @@ def training_loop(train_loader, val_loader):
 
         # Validate
         if (epoch + 1) % VALIDATION_INTERVAL == 0:
+            # Generate validation values
             val_g_loss, val_c_loss, val_w_dist = validate(
                 generator, critic, val_loader, device
             )
@@ -274,6 +275,7 @@ def training_loop(train_loader, val_loader):
                 f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
             )
 
+            # Display example audio
             examples_to_generate = 3
             z = torch.randn(examples_to_generate, LATENT_DIM, 1, 1).to(device)
             generated_audio = generator(z).squeeze()
@@ -286,7 +288,7 @@ def training_loop(train_loader, val_loader):
                 )
 
         # Early exit + saving
-        wasserstein_dist_thresh = 0.2
+        wasserstein_dist_thresh = 1.0
         early_exit_train_condition = (
             np.abs(train_w_dist) <= wasserstein_dist_thresh  # threshold met
             and (epoch + 1) != N_EPOCHS  # Not last epoch

@@ -28,7 +28,7 @@ def save_model(model):
         model.state_dict(),
         model_save_path,
     )
-    print(f"Model Saved")
+    print(f"Model saved at {model_save_path}")
 
 
 def get_device():
