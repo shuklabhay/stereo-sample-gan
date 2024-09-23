@@ -159,7 +159,7 @@ def scale_data_to_range(data, new_min, new_max):
 
 
 # Validation helpers
-def graph_spectrogram(audio_data, sample_name):
+def graph_spectrogram(audio_data, sample_name, save=False):
     fig = sp.make_subplots(rows=2, cols=1)
 
     for i in range(2):
@@ -190,7 +190,11 @@ def graph_spectrogram(audio_data, sample_name):
         )
     )
     fig.update_layout(title_text=f"{sample_name}")
-    fig.show()
+
+    if save is False:
+        fig.show()
+    else:
+        fig.write_image(f"paper/training_progress/{sample_name}")
 
 
 def generate_sine_impulses(num_impulses=1, outPath="model"):

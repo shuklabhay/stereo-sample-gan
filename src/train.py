@@ -11,7 +11,7 @@ from utils.signal_helpers import graph_spectrogram
 
 
 # Constants
-N_EPOCHS = 8
+N_EPOCHS = 6
 VALIDATION_INTERVAL = 4
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
@@ -123,6 +123,7 @@ def train_epoch(
     scheduler_G,
     scheduler_C,
     device,
+    epoch_number,
 ):
     generator.train()
     critic.train()
@@ -166,6 +167,15 @@ def train_epoch(
             optimizer_G.step()
 
             total_g_loss += g_loss.item()
+
+            # Training progress image saving
+            if i % (CRITIC_STEPS * 14) == 0:
+                fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
+                graph_spectrogram(
+                    fake_audio_to_visualize,
+                    f"generator_epoch_{epoch_number + 1}_step_{i}.png",
+                    True,
+                )
 
     avg_g_loss = total_g_loss / len(dataloader)
     avg_c_loss = total_c_loss / len(dataloader)
@@ -226,6 +236,7 @@ def training_loop(train_loader, val_loader):
     generator.to(device)
     critic.to(device)
     for epoch in range(N_EPOCHS):
+        # Train
         train_g_loss, train_c_loss = train_epoch(
             generator,
             critic,
@@ -235,24 +246,15 @@ def training_loop(train_loader, val_loader):
             scheduler_G,
             scheduler_C,
             device,
+            epoch,
         )
 
         print(
             f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}"
         )
 
-        # Validation and saving
-        early_exit_loss_thresh = 0.2
-        early_exit_condition = (
-            np.abs(train_g_loss) <= early_exit_loss_thresh and (epoch + 1) != N_EPOCHS
-        )
-
-        if early_exit_condition is True:
-            print(
-                f"Early exit threshold hit at {epoch+1}, Final g_loss: {train_g_loss:.6f}"
-            )
-
-        if (epoch + 1) % VALIDATION_INTERVAL == 0 or early_exit_condition is True:
+        # Validate
+        if (epoch + 1) % VALIDATION_INTERVAL == 0:
             val_g_loss, val_c_loss = validate(generator, critic, val_loader, device)
             print(
                 f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}"
@@ -269,7 +271,30 @@ def training_loop(train_loader, val_loader):
                     f"Epoch {epoch + 1} Generated Audio #{i + 1}",
                 )
 
-        # Save model
-        if (epoch + 1) % SAVE_INTERVAL == 0 or early_exit_condition is True:
+        # Early exit + saving
+        early_exit_g_loss_thresh = 0.2
+        early_exit_c_loss_thresh = 1.0
+        early_exit_train_condition = (
+            np.abs(train_g_loss) <= early_exit_g_loss_thresh  # Loss under exit thresh
+            and (epoch + 1) != N_EPOCHS  # Not last epoch
+        )
+        exit_training = False
+
+        if early_exit_train_condition is True:
+            # Train thresh hit
+            print(
+                f"Early exit train threshold hit at epoch {epoch+1}, g_loss={train_g_loss:.6f}"
+            )
+            val_g_loss, val_c_loss = validate(generator, critic, val_loader, device)
+
+            # Check val thresh
+            if np.abs(val_g_loss) <= early_exit_c_loss_thresh:
+                print(f"val_g_loss={val_g_loss:.6f}, stopping training")
+                exit_training = True
+            else:
+                print(f"val_g_loss={val_g_loss:.6f}, continuing training")
+
+        # Exit training and save model
+        if (epoch + 1) % SAVE_INTERVAL == 0 or exit_training is True:
             save_model(generator)
             break
