@@ -12,7 +12,7 @@ from utils.signal_helpers import graph_spectrogram
 
 # Constants
 N_EPOCHS = 6
-VALIDATION_INTERVAL = 4
+VALIDATION_INTERVAL = 3
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 LR_G = 0.003
@@ -69,7 +69,7 @@ def compute_c_loss(
 
 # Loss Metrics
 def compute_wasserstein_diff(real_validity, fake_validity):
-    return torch.mean(real_validity) - torch.mean(fake_validity)
+    return -(torch.mean(real_validity) - torch.mean(fake_validity))
 
 
 def calculate_feature_match_diff(critic, real_audio_data, fake_audio_data):
