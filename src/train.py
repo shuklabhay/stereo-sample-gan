@@ -172,6 +172,15 @@ def train_epoch(
 
             total_g_loss += g_loss.item()
 
+            # Save training progress image
+            if i % (CRITIC_STEPS * 14) == 0:
+                fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
+                graph_spectrogram(
+                    fake_audio_to_visualize,
+                    f"generator_epoch_{epoch_number + 1}_step_{i}.png",
+                    True,
+                )
+
     avg_g_loss = total_g_loss / len(dataloader)
     avg_c_loss = total_c_loss / len(dataloader)
     avg_w_dist = total_w_dist / len(dataloader)
