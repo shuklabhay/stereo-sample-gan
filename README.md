@@ -6,25 +6,29 @@ StereoSampleGAN: A lightweight approach high fidelity stereo audio sample genera
 
 ## Model Usage
 
-1. Prereqs
+### 1. Prereqs
 
 - Optional but highly reccomended: Set up a [Python virtual environment.](https://www.youtube.com/watch?v=e5GL1obY_sI)
   - Audio loader package `librosa` requires an outdated version of Numpy
 - Install requirements by running `pip3 install -r requirements.txt`
 
-2. Generate Audio
+### 2. Generate audio from pretrained models
 
-- Specify usage paramaters in `usage_params.py`
-  - Make sure `generated_sample_length` value matches what the model was trained on
-  - See pretrained models section for more info
-- Generate audio by running `python3 generate.py`
+Specify sample count to generate, output, etc `usage_params.py`
 
-3. Train model
+- Generate audio from the Curated Kick model by running `python3 src/run_pretrained/generate_curated_kick.py`
+- Generate audio from the Diverse Kick model by running `python3 src/run_pretrained/generate_diverse_kick.py`
+- Generate audio from the One Shot model by running `python3 src/run_pretrained/generate_one_shot.py`
 
-- Specify training data paramaters in `usage_params.py`
-  - I reccomend anywhere between 4,000-8000 training examples, any multiple of 8
-- Process training data by running `python3 encode_audio_data.py`
-- Train model by running `python3 stereo_sample_gan.py`
+### 3. Train model
+
+Specify training data paramaters in `usage_params.py`
+
+- I reccomend anywhere between 4,000-8000 training examples, any multiple of 8 and audio
+  <1 sec long (longer hasn't been fully tested)
+- Prepare training data by running `python3 src/data_processing/encode_audio_data.py`
+- Train model by running `python3 src/stereo_sample_gan.py`
+- Generate audio (based on current `usage_params.py`) by running `python3 src/generate.py`
 
 ## Pretrained Models
 
@@ -33,20 +37,16 @@ StereoSampleGAN: A lightweight approach high fidelity stereo audio sample genera
 Kick drum generation model trained on ~8000 essentially random kick drums.
 
 - More variation between each generated sample but audio is often inconsistent and contains some artifacts.
-- `model_save_name="StereoSampleGAN-DiverseKick`
-- `training_sample_length = 0.6`
 
 Training progress:
 
-<img src="paper/static/diverse_kick_training_progress.gif" alt="Diverse kick training progress" width="400">
+<img src="static/diverse_kick_training_progress.gif" alt="Diverse kick training progress" width="400">
 
 ### Diverse Kick Drums
 
-Kick drum generation model trained on ~4400 curated kick drums.
+Kick drum generation model trained on ~4400 slightly more rigorously but still essentially randomly chosen kick drums.
 
-- Less variation between each drum sample but also less noisy and closer to the "normal" kick drum sound
-- `model_save_name="StereoSampleGAN-CuratedKick`
-- `training_sample_length = 0.6`
+- Less variation between each drum sample's tone but also closer to a "normal" kick drum sound. Still noisy and sometimes but more infrequently noisy.
 
 ### One Shots
 

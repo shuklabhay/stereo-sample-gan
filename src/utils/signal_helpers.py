@@ -55,7 +55,7 @@ def audio_to_norm_db(channel_info):
     return np.array(stereo_loudness_info)  # OUT: Frames, Freq Bins in norm dB
 
 
-def norm_db_to_audio(loudness_info):
+def norm_db_to_audio(loudness_info, len_audio_in):
     # IN: Frames, Freq Bins in norm dB
     stereo_audio = []
 
@@ -63,7 +63,7 @@ def norm_db_to_audio(loudness_info):
         data = scale_data_to_range(loudness_info[i], -40, 40)
         data[data < -35] = -40  # Noise gate
         magnitudes = librosa.db_to_amplitude(data)
-        istft = griffin_lim_istft(magnitudes)
+        istft = griffin_lim_istft(magnitudes, len_audio_in)
         stereo_audio.append(istft)
 
     stereo_audio = np.array(stereo_audio)
@@ -71,9 +71,11 @@ def norm_db_to_audio(loudness_info):
     return stereo_audio
 
 
-def griffin_lim_istft(channel_magnitudes):
+def griffin_lim_istft(channel_magnitudes, len_audio_in):
     iterations = 10
     momentum = 0.99
+
+    hop = int(len_audio_in * GLOBAL_SR) // (DATA_SHAPE - 1)
 
     angles = np.exp(2j * np.pi * np.random.rand(*channel_magnitudes.shape))
     stft = channel_magnitudes.astype(np.complex64) * angles
@@ -81,14 +83,12 @@ def griffin_lim_istft(channel_magnitudes):
     for i in range(iterations):
         y = librosa.istft(
             stft.T,
-            hop_length=GLOBAL_HOP,
+            hop_length=hop,
             win_length=GLOBAL_WIN,
             window=window,
             center=True,
         )
-        y = librosa.util.fix_length(
-            y, size=int(training_sample_length * GLOBAL_SR), axis=0
-        )
+        y = librosa.util.fix_length(y, size=int(len_audio_in * GLOBAL_SR), axis=0)
 
         if i > 0:
             y = momentum * y + (1 - momentum) * y_prev
@@ -97,7 +97,7 @@ def griffin_lim_istft(channel_magnitudes):
         stft = librosa.stft(
             y,
             n_fft=GLOBAL_WIN,
-            hop_length=GLOBAL_HOP,
+            hop_length=hop,
             win_length=GLOBAL_WIN,
             window=window,
             center=True,
@@ -213,13 +213,13 @@ def generate_sine_impulses(num_impulses=1, outPath="model"):
         save_audio(save_path, audio_signal)
 
 
-def stft_and_istft(path, file_name):
+def stft_and_istft(path, file_name, len_audio_in):
     # Load data
     y = load_audio(path)
 
     # Process data
     stft = audio_to_norm_db(y)
-    istft = norm_db_to_audio(stft)
+    istft = norm_db_to_audio(stft, len_audio_in)
     vis_istft = audio_to_norm_db(istft)
 
     # Visualize/save data

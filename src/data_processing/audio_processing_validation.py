@@ -3,9 +3,8 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import os
 import random
-from usage_params import compiled_data_path
+from usage_params import compiled_data_path, training_sample_length
 from utils.signal_helpers import (
     stft_and_istft,
 )
@@ -28,4 +27,4 @@ def choose_random_sample():
 # Analyze fourier transform audio degradation
 sample_path, sample_name = choose_random_sample()
 
-stft_and_istft(sample_path, "test")
+stft_and_istft(sample_path, "test", training_sample_length)
