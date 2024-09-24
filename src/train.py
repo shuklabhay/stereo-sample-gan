@@ -11,11 +11,11 @@ from utils.signal_helpers import graph_spectrogram
 
 
 # Constants
-N_EPOCHS = 12
+N_EPOCHS = 8
 VALIDATION_INTERVAL = 3
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
-LR_G = 0.003
+LR_G = 0.001
 LR_C = 0.004
 LAMBDA_GP = 5
 CRITIC_STEPS = 5
@@ -172,15 +172,6 @@ def train_epoch(
 
             total_g_loss += g_loss.item()
 
-            # Training progress image saving
-            if i % (CRITIC_STEPS * 14) == 0:
-                fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
-                graph_spectrogram(
-                    fake_audio_to_visualize,
-                    f"generator_epoch_{epoch_number + 1}_step_{i}.png",
-                    True,
-                )
-
     avg_g_loss = total_g_loss / len(dataloader)
     avg_c_loss = total_c_loss / len(dataloader)
     avg_w_dist = total_w_dist / len(dataloader)
@@ -292,6 +283,7 @@ def training_loop(train_loader, val_loader):
         early_exit_train_condition = (
             np.abs(train_w_dist) <= wasserstein_dist_thresh  # threshold met
             and (epoch + 1) != N_EPOCHS  # Not last epoch
+            and (epoch + 1) > 2  # Train for more than two epochs
         )
 
         if early_exit_train_condition is True:
