@@ -194,7 +194,7 @@ def graph_spectrogram(audio_data, sample_name, save=False):
     if save is False:
         fig.show()
     else:
-        fig.write_image(f"paper/training_progress/{sample_name}")
+        fig.write_image(f"outputs/training_progress/{sample_name}")
 
 
 def generate_sine_impulses(num_impulses=1, outPath="model"):

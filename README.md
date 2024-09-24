@@ -30,7 +30,7 @@ StereoSampleGAN: A lightweight approach high fidelity stereo audio sample genera
 
 ### Diverse Kick Drums
 
-Kick Drum generation model trained on ~8000 essentially random kick drums.
+Kick drum generation model trained on ~8000 essentially random kick drums.
 
 - More variation between each generated sample but audio is often inconsistent and contains some artifacts.
 - `model_save_name="StereoSampleGAN-DiverseKick`
@@ -42,7 +42,7 @@ Training progress:
 
 ### Diverse Kick Drums
 
-Kick Drum generation model trained on ~4000 curated kick drums.
+Kick drum generation model trained on ~4400 curated kick drums.
 
 - Less variation between each drum sample but also less noisy and closer to the "normal" kick drum sound
 - `model_save_name="StereoSampleGAN-CuratedKick`
