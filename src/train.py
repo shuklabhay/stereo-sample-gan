@@ -11,8 +11,8 @@ from utils.signal_helpers import graph_spectrogram
 
 
 # Constants
-N_EPOCHS = 8
-VALIDATION_INTERVAL = 3
+N_EPOCHS = 12
+VALIDATION_INTERVAL = 4
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 LR_G = 0.001
