@@ -289,8 +289,8 @@ def training_loop(train_loader, val_loader):
                 )
 
         # Early exit/saving
-        if val_w_dist < best_val_w_dist:
-            best_val_w_dist = val_w_dist
+        if np.abs(val_w_dist) < best_val_w_dist:
+            best_val_w_dist = np.abs(val_w_dist)
             epochs_no_improve = 0
             save_model(generator)
         else:
