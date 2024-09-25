@@ -11,11 +11,11 @@ from utils.signal_helpers import graph_spectrogram
 
 
 # Constants
-N_EPOCHS = 12
-VALIDATION_INTERVAL = 4
+N_EPOCHS = 8
+SHOW_GENERATED_INTERVAL = 4
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
-LR_G = 0.001
+LR_G = 0.002
 LR_C = 0.004
 LAMBDA_GP = 5
 CRITIC_STEPS = 5
@@ -247,6 +247,10 @@ def training_loop(train_loader, val_loader):
     device = get_device()
     generator.to(device)
     critic.to(device)
+
+    best_val_w_dist = 0.0
+    epochs_no_improve = 0
+    patience = 5  # epochs
     for epoch in range(N_EPOCHS):
         # Train
         train_g_loss, train_c_loss, train_w_dist = train_epoch(
@@ -260,22 +264,19 @@ def training_loop(train_loader, val_loader):
             device,
             epoch,
         )
+        val_g_loss, val_c_loss, val_w_dist = validate(
+            generator, critic, val_loader, device
+        )
 
         print(
             f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}, W Dist: {train_w_dist:.6f}"
         )
+        print(
+            f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
+        )
 
-        # Validate
-        if (epoch + 1) % VALIDATION_INTERVAL == 0:
-            # Generate validation values
-            val_g_loss, val_c_loss, val_w_dist = validate(
-                generator, critic, val_loader, device
-            )
-            print(
-                f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
-            )
-
-            # Display example audio
+        # Display example audio
+        if (epoch + 1) % SHOW_GENERATED_INTERVAL == 0:
             examples_to_generate = 3
             z = torch.randn(examples_to_generate, LATENT_DIM, 1, 1).to(device)
             generated_audio = generator(z).squeeze()
@@ -287,18 +288,13 @@ def training_loop(train_loader, val_loader):
                     f"Epoch {epoch + 1} Generated Audio #{i + 1}",
                 )
 
-        # Early exit + saving
-        wasserstein_dist_thresh = 1.0
-        early_exit_train_condition = (
-            np.abs(train_w_dist) <= wasserstein_dist_thresh  # threshold met
-            and (epoch + 1) != N_EPOCHS  # Not last epoch
-            and (epoch + 1) > 2  # Train for more than two epochs
-        )
-
-        if early_exit_train_condition is True:
-            print(f"Early exit train threshold hit at epoch {epoch+1}")
-
-        # Exit training and save model
-        if (epoch + 1) % SAVE_INTERVAL == 0 or early_exit_train_condition is True:
+        # Early exit/saving
+        if val_w_dist < best_val_w_dist:
+            best_val_w_dist = val_w_dist
+            epochs_no_improve = 0
             save_model(generator)
-            break
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= patience:
+                print("Early stopping triggered")
+                break

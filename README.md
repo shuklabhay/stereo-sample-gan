@@ -28,7 +28,7 @@ Specify training data paramaters in `usage_params.py`
   <1 sec long (longer hasn't been fully tested)
 - Prepare training data by running `python3 src/data_processing/encode_audio_data.py`
 - Train model by running `python3 src/stereo_sample_gan.py`
-  - You can experiment with increasing `N_EPOCHS` in `train.py` based on amount of data and results running with different numbers of epochs.
+  - You might have to tune `N_EPOCHS` and `LR_G` in `train.py` based on amount of data and results running with different numbers of epochs.
 - Generate audio (based on current `usage_params.py`) by running `python3 src/generate.py`
 
 ## Pretrained Models
