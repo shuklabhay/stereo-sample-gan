@@ -11,7 +11,7 @@ from utils.signal_helpers import graph_spectrogram
 
 
 # Constants
-N_EPOCHS = 8
+N_EPOCHS = 14
 SHOW_GENERATED_INTERVAL = 4
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
@@ -248,7 +248,6 @@ def training_loop(train_loader, val_loader):
     generator.to(device)
     critic.to(device)
 
-    best_val_w_dist = 0.0
     epochs_no_improve = 0
     patience = 5  # epochs
     for epoch in range(N_EPOCHS):
@@ -264,12 +263,12 @@ def training_loop(train_loader, val_loader):
             device,
             epoch,
         )
-        val_g_loss, val_c_loss, val_w_dist = validate(
-            generator, critic, val_loader, device
-        )
-
         print(
             f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}, W Dist: {train_w_dist:.6f}"
+        )
+
+        val_g_loss, val_c_loss, val_w_dist = validate(
+            generator, critic, val_loader, device
         )
         print(
             f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
@@ -289,10 +288,15 @@ def training_loop(train_loader, val_loader):
                 )
 
         # Early exit/saving
+        if (epoch + 1) == 0:
+            best_val_w_dist = np.abs(val_w_dist)
+            print(f"initialized best_val_w_dist at {np.abs(val_w_dist)}")
+
         if np.abs(val_w_dist) < best_val_w_dist:
             best_val_w_dist = np.abs(val_w_dist)
             epochs_no_improve = 0
             save_model(generator)
+            print(f"Model saved at w_dist={val_w_dist:.6f}")
         else:
             epochs_no_improve += 1
             if epochs_no_improve >= patience:
