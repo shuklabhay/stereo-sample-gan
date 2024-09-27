@@ -22,4 +22,4 @@ encode_sample_directory(training_audio_dir, compiled_data_path, visualize)
 real_data = load_loudness_data(
     compiled_data_path
 )  # datapts, channels, frames, freq bins
-print("Data shape:", str(real_data.shape))
+print(f"{training_audio_dir} data shape: {str(real_data.shape)}")
