@@ -30,7 +30,7 @@ Specify training data paramaters in `usage_params.py`
 - Train model by running `python3 src/stereo_sample_gan.py`
 - Generate audio (based on current `usage_params.py`) by running `python3 src/generate.py`
 
-Diverse Kick Drum Model Training progress (8 epochs):
+Training progress visualization (Diverse Kick Drum Model):
 
 <img src="static/diverse_kick_training_progress.gif" alt="Diverse kick training progress" width="400">
 
@@ -48,7 +48,7 @@ Kick drum generation model trained on ~4400 slightly more rigorously but still e
 
 - Less variation between each drum sample's tone but also closer to a "normal" kick drum sound. Still noisy and sometimes but more infrequently noisy.
 
-### One Shots
+### Instrument One Shot
 
 - Instrument one shot generation model, trained on ~3000 semi-curated instrument one shots.
 - WIP
