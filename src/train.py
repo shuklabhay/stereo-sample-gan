@@ -291,8 +291,7 @@ def training_loop(train_loader, val_loader):
         if (epoch + 1) == 0:
             best_val_w_dist = np.abs(val_w_dist)
             print(f"initialized best_val_w_dist at {np.abs(val_w_dist)}")
-
-        if np.abs(val_w_dist) < best_val_w_dist:
+        elif best_val_w_dist and np.abs(val_w_dist) < best_val_w_dist:
             best_val_w_dist = np.abs(val_w_dist)
             epochs_no_improve = 0
             save_model(generator)
