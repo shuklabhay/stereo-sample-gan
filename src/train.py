@@ -250,7 +250,7 @@ def training_loop(train_loader, val_loader):
 
     best_val_w_dist = float("inf")  # Initialize
     epochs_no_improve = 0
-    patience = 5  # epochs
+    patience = 3  # epochs
     for epoch in range(N_EPOCHS):
         # Train
         train_g_loss, train_c_loss, train_w_dist = train_epoch(
