@@ -15,7 +15,7 @@ N_EPOCHS = 14
 SHOW_GENERATED_INTERVAL = 4
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
-LR_G = 0.001
+LR_G = 0.003
 LR_C = 0.004
 LAMBDA_GP = 5
 CRITIC_STEPS = 5
@@ -172,14 +172,14 @@ def train_epoch(
 
             total_g_loss += g_loss.item()
 
-            # Save training progress image
-            if i % (CRITIC_STEPS * 14) == 0:
-                fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
-                graph_spectrogram(
-                    fake_audio_to_visualize,
-                    f"generator_epoch_{epoch_number + 1}_step_{i}.png",
-                    True,
-                )
+            # # Save training progress image
+            # if i % (CRITIC_STEPS * 14) == 0:
+            #     fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
+            #     graph_spectrogram(
+            #         fake_audio_to_visualize,
+            #         f"generator_epoch_{epoch_number + 1}_step_{i}.png",
+            #         True,
+            #     )
 
     avg_g_loss = total_g_loss / len(dataloader)
     avg_c_loss = total_c_loss / len(dataloader)
@@ -248,6 +248,7 @@ def training_loop(train_loader, val_loader):
     generator.to(device)
     critic.to(device)
 
+    best_val_w_dist = float("inf")  # Initialize
     epochs_no_improve = 0
     patience = 5  # epochs
     for epoch in range(N_EPOCHS):
@@ -274,7 +275,7 @@ def training_loop(train_loader, val_loader):
             f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
         )
 
-        # Display example audio
+        # Generate example audio
         if (epoch + 1) % SHOW_GENERATED_INTERVAL == 0:
             examples_to_generate = 3
             z = torch.randn(examples_to_generate, LATENT_DIM, 1, 1).to(device)
@@ -288,16 +289,14 @@ def training_loop(train_loader, val_loader):
                 )
 
         # Early exit/saving
-        if (epoch + 1) == 0:
-            best_val_w_dist = np.abs(val_w_dist)
-            print(f"initialized best_val_w_dist at {np.abs(val_w_dist)}")
-        elif best_val_w_dist and np.abs(val_w_dist) < best_val_w_dist:
+        if np.abs(val_w_dist) < best_val_w_dist:
             best_val_w_dist = np.abs(val_w_dist)
             epochs_no_improve = 0
             save_model(generator)
             print(f"Model saved at w_dist={val_w_dist:.6f}")
         else:
             epochs_no_improve += 1
+            print(f"epochs without improvement: {epochs_no_improve}")
             if epochs_no_improve >= patience:
                 print("Early stopping triggered")
                 break

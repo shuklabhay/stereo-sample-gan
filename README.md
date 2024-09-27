@@ -28,22 +28,21 @@ Specify training data paramaters in `usage_params.py`
   <1 sec long (longer hasn't been fully tested)
 - Prepare training data by running `python3 src/data_processing/encode_audio_data.py`
 - Train model by running `python3 src/stereo_sample_gan.py`
-  - You might have to tune `N_EPOCHS` and `LR_G` in `train.py` based on amount of data and results running with different numbers of epochs.
 - Generate audio (based on current `usage_params.py`) by running `python3 src/generate.py`
+
+Diverse Kick Drum Model Training progress (8 epochs):
+
+<img src="static/diverse_kick_training_progress.gif" alt="Diverse kick training progress" width="400">
 
 ## Pretrained Models
 
-### Diverse Kick Drums
+### Diverse Kick Drum
 
 Kick drum generation model trained on ~8000 essentially random kick drums.
 
 - More variation between each generated sample but audio is often inconsistent and contains some artifacts.
 
-Training progress (8 epochs):
-
-<img src="static/diverse_kick_training_progress.gif" alt="Diverse kick training progress" width="400">
-
-### Diverse Kick Drums
+### Curated Kick Drum
 
 Kick drum generation model trained on ~4400 slightly more rigorously but still essentially randomly chosen kick drums.
 
