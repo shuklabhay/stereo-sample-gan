@@ -7,6 +7,7 @@ from torch.nn.utils import spectral_norm
 # Constants
 BATCH_SIZE = 16
 LATENT_DIM = 128
+DROPOUT_RATE = 0.2
 
 
 # Model Components
@@ -46,23 +47,23 @@ class Generator(nn.Module):
             nn.ConvTranspose2d(LATENT_DIM, 128, kernel_size=4, stride=1, padding=0),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 128, 4, 4)
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 64, 8, 8)
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(32),
             nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 32, 16, 16)
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(16),
             nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 16, 32, 32)
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             nn.ConvTranspose2d(16, 8, kernel_size=6, stride=4, padding=1),
             nn.BatchNorm2d(8),
             nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 8, 128, 128)
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             nn.ConvTranspose2d(8, N_CHANNELS, kernel_size=6, stride=2, padding=2),
             nn.Tanh(),  # Shape: (BATCH_SIZE, N_CHANNELS, 256, 256)
         )
@@ -78,28 +79,28 @@ class Critic(nn.Module):
         self.conv_blocks = nn.Sequential(
             spectral_norm(nn.Conv2d(N_CHANNELS, 4, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             spectral_norm(nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(8),
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             spectral_norm(nn.Conv2d(8, 16, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(16),
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             LinearAttention(16),
             spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(32),
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(64),
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(128),
-            nn.Dropout(0.3),
+            nn.Dropout(DROPOUT_RATE),
             spectral_norm(nn.Conv2d(128, 1, kernel_size=4, stride=1, padding=0)),
             nn.Flatten(),
         )

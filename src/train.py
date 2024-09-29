@@ -12,7 +12,7 @@ from utils.signal_helpers import graph_spectrogram
 
 # Constants
 N_EPOCHS = 14
-SHOW_GENERATED_INTERVAL = 4
+SHOW_GENERATED_INTERVAL = int(N_EPOCHS / 3)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 LR_G = 0.003
@@ -237,11 +237,13 @@ def training_loop(train_loader, val_loader):
     # Initialize models and optimizers
     generator = Generator()
     critic = Critic()
-    optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.05)
-    optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.05)
+    optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.06)
+    optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.06)
 
-    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.5, patience=5)
-    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.5, patience=5)
+    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.5, patience=2)
+    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.5, patience=2)
+
+    # try making lr scale based on w distance ?
 
     # Train
     device = get_device()
