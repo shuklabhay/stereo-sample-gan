@@ -2,7 +2,7 @@ import torch
 from architecture import LATENT_DIM, Critic, Generator
 import numpy as np
 from torch.optim.rmsprop import RMSprop
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import LambdaLR
 from utils.file_helpers import (
     get_device,
     save_model,
@@ -10,7 +10,7 @@ from utils.file_helpers import (
 from utils.signal_helpers import graph_spectrogram
 
 
-# Constants
+# Training params
 N_EPOCHS = 14
 SHOW_GENERATED_INTERVAL = int(N_EPOCHS / 3)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
@@ -19,6 +19,38 @@ LR_G = 0.003
 LR_C = 0.004
 LAMBDA_GP = 5
 CRITIC_STEPS = 5
+
+
+class WDistLRScheduler:
+    def __init__(self, optimizer, init_lr, beta=0.9, min_lr_factor=0.1):
+        self.optimizer = optimizer
+        self.init_lr = init_lr
+        self.beta = beta
+        self.min_lr_factor = min_lr_factor
+        self.max_w_dist = None
+        self.scheduler = LambdaLR(optimizer, self.lr_lambda)
+
+    def lr_lambda(self, _):
+        if self.max_w_dist is None:
+            return 1.0
+        scaling_factor = 1.0 - (1.0 - self.min_lr_factor) * np.exp(
+            -3 * (self.current_w_dist / self.max_w_dist)
+        )
+        return max(self.min_lr_factor, scaling_factor)
+
+    def step(self, w_dist):
+        if self.max_w_dist is None:
+            self.max_w_dist = w_dist
+        else:
+            self.max_w_dist = self.beta * self.max_w_dist + (1 - self.beta) * max(
+                w_dist, self.max_w_dist
+            )
+
+        self.current_w_dist = w_dist
+        self.scheduler.step()
+
+    def get_last_lr(self):
+        return self.scheduler.get_last_lr()
 
 
 # Loss metrics
@@ -237,13 +269,11 @@ def training_loop(train_loader, val_loader):
     # Initialize models and optimizers
     generator = Generator()
     critic = Critic()
-    optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.06)
-    optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.06)
+    optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.05)
+    optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.05)
 
-    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.5, patience=2)
-    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.5, patience=2)
-
-    # try making lr scale based on w distance ?
+    scheduler_G = WDistLRScheduler(optimizer_G, LR_G)
+    scheduler_C = WDistLRScheduler(optimizer_C, LR_C)
 
     # Train
     device = get_device()
@@ -270,11 +300,17 @@ def training_loop(train_loader, val_loader):
             f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}, W Dist: {train_w_dist:.6f}"
         )
 
+        # Validate
         val_g_loss, val_c_loss, val_w_dist = validate(
             generator, critic, val_loader, device
         )
         print(
             f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
+        )
+
+        print(
+            f"G lr: {scheduler_G.get_last_lr()[0]:.6f}",
+            f"C lr: {scheduler_C.get_last_lr()[0]:.6f}",
         )
 
         # Generate example audio
