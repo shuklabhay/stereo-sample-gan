@@ -2,7 +2,7 @@ import torch
 from architecture import LATENT_DIM, Critic, Generator
 import numpy as np
 from torch.optim.rmsprop import RMSprop
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ExponentialLR
 from utils.file_helpers import (
     get_device,
     save_model,
@@ -172,21 +172,21 @@ def train_epoch(
 
             total_g_loss += g_loss.item()
 
-            # Save training progress image
-            if i % (CRITIC_STEPS * 14) == 0:
-                fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
-                graph_spectrogram(
-                    fake_audio_to_visualize,
-                    f"diverse_generator_epoch_{epoch_number + 1}_step_{i}.png",
-                    True,
-                )
+            # # Save training progress images
+            # if i % (CRITIC_STEPS * 14) == 0:
+            #     fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
+            #     graph_spectrogram(
+            #         fake_audio_to_visualize,
+            #         f"diverse_generator_epoch_{epoch_number + 1}_step_{i}.png",
+            #         True,
+            #     )
 
     avg_g_loss = total_g_loss / len(dataloader)
     avg_c_loss = total_c_loss / len(dataloader)
     avg_w_dist = total_w_dist / len(dataloader)
 
-    scheduler_G.step(avg_w_dist)
-    scheduler_C.step(avg_w_dist)
+    scheduler_G.step()
+    scheduler_C.step()
 
     return avg_g_loss, avg_c_loss, avg_w_dist
 
@@ -240,8 +240,9 @@ def training_loop(train_loader, val_loader):
     optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.05)
     optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.05)
 
-    scheduler_G = ReduceLROnPlateau(optimizer_G, patience=2, factor=0.5)
-    scheduler_C = ReduceLROnPlateau(optimizer_C, patience=2, factor=0.5)
+    LR_DECAY = 0.9
+    scheduler_G = ExponentialLR(optimizer_G, gamma=LR_DECAY)
+    scheduler_C = ExponentialLR(optimizer_C, gamma=LR_DECAY)
 
     # Train
     device = get_device()
@@ -251,6 +252,7 @@ def training_loop(train_loader, val_loader):
     best_val_w_dist = float("inf")  # Initialize
     epochs_no_improve = 0
     patience = 3  # epochs
+    warmup = 4  # epochs
     for epoch in range(N_EPOCHS):
         # Train
         train_g_loss, train_c_loss, train_w_dist = train_epoch(
@@ -290,14 +292,15 @@ def training_loop(train_loader, val_loader):
                 )
 
         # Early exit/saving
-        if np.abs(val_w_dist) < best_val_w_dist:
-            best_val_w_dist = np.abs(val_w_dist)
-            epochs_no_improve = 0
-            save_model(generator)
-            print(f"Model saved at w_dist={val_w_dist:.6f}")
-        else:
-            epochs_no_improve += 1
-            print(f"epochs without improvement: {epochs_no_improve}")
-            if epochs_no_improve >= patience:
-                print("Early stopping triggered")
-                break
+        if (epoch + 1) >= warmup:
+            if np.abs(val_w_dist) < best_val_w_dist:
+                best_val_w_dist = np.abs(val_w_dist)
+                epochs_no_improve = 0
+                save_model(generator)
+                print(f"Model saved at w_dist={val_w_dist:.6f}")
+            else:
+                epochs_no_improve += 1
+                print(f"epochs without improvement: {epochs_no_improve}")
+                if epochs_no_improve >= patience:
+                    print("Early stopping triggered")
+                    break
