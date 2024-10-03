@@ -293,14 +293,13 @@ def training_loop(train_loader, val_loader):
 
         # Early exit/saving
         if (epoch + 1) >= warmup:
+            save_model(generator)
             if np.abs(val_w_dist) < best_val_w_dist:
                 best_val_w_dist = np.abs(val_w_dist)
                 epochs_no_improve = 0
-                save_model(generator)
-                print(f"Model saved at w_dist={val_w_dist:.6f}")
             else:
                 epochs_no_improve += 1
-                print(f"epochs without improvement: {epochs_no_improve}")
+                print(f"epochs without w_dist improvement: {epochs_no_improve}")
                 if epochs_no_improve >= patience:
                     print("Early stopping triggered")
                     break
