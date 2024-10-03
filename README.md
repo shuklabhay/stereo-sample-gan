@@ -18,7 +18,7 @@ Specify sample count to generate, output, etc `usage_params.py`
 
 - Generate audio from the Curated Kick model by running `python3 src/run_pretrained/generate_curated_kick.py`
 - Generate audio from the Diverse Kick model by running `python3 src/run_pretrained/generate_diverse_kick.py`
-- Generate audio from the One Shot model by running `python3 src/run_pretrained/generate_one_shot.py`
+- Generate audio from the Instrument One Shot model by running `python3 src/run_pretrained/generate_instrument_one_shot.py`
 
 ### 3. Train model
 
