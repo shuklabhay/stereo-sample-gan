@@ -8,8 +8,9 @@ from train import training_loop
 from utils.file_helpers import (
     get_device,
     load_loudness_data,
-    compiled_data_path,
 )
+
+from usage_params import compiled_data_path
 
 # Constants
 LR_G = 0.003

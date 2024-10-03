@@ -2,16 +2,17 @@ import torch
 from architecture import LATENT_DIM, Critic, Generator
 import numpy as np
 from torch.optim.rmsprop import RMSprop
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ExponentialLR
 from utils.file_helpers import (
     get_device,
     save_model,
 )
 from utils.signal_helpers import graph_spectrogram
 
-# Constants
-N_EPOCHS = 8
-VALIDATION_INTERVAL = 4
+
+# Training params
+N_EPOCHS = 14
+SHOW_GENERATED_INTERVAL = int(N_EPOCHS / 3)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 LR_G = 0.003
@@ -22,13 +23,14 @@ CRITIC_STEPS = 5
 
 # Loss metrics
 def compute_g_loss(critic, fake_validity, fake_audio_data, real_audio_data):
+    wasserstein_dist = -torch.mean(fake_validity)
     feat_match = 0.35 * calculate_feature_match_diff(
         critic, real_audio_data, fake_audio_data
     )
 
     computed_g_loss = (
-        # Force vertical
-        -torch.mean(fake_validity)
+        # generator total loss
+        wasserstein_dist
         + feat_match
     )
     return computed_g_loss
@@ -43,13 +45,15 @@ def compute_c_loss(
     training,
     device,
 ):
+    wasserstein_dist = compute_wasserstein_diff(real_validity, fake_validity)
     spectral_diff = 0.15 * calculate_spectral_diff(real_audio_data, fake_audio_data)
     spectral_convergence = 0.15 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
     )
 
     computed_c_loss = (
-        -(torch.mean(real_validity) - torch.mean(fake_validity))
+        # discrim total loss
+        wasserstein_dist
         + spectral_diff
         + spectral_convergence
     )
@@ -64,8 +68,8 @@ def compute_c_loss(
 
 
 # Loss Metrics
-def compute_wasserstein_distance(real_validity, fake_validity):
-    return torch.mean(real_validity) - torch.mean(fake_validity)
+def compute_wasserstein_diff(real_validity, fake_validity):
+    return -(torch.mean(real_validity) - torch.mean(fake_validity))
 
 
 def calculate_feature_match_diff(critic, real_audio_data, fake_audio_data):
@@ -122,10 +126,11 @@ def train_epoch(
     scheduler_G,
     scheduler_C,
     device,
+    epoch_number,
 ):
     generator.train()
     critic.train()
-    total_g_loss, total_c_loss = 0, 0
+    total_g_loss, total_c_loss, total_w_dist = 0, 0, 0
 
     for i, (real_audio_data,) in enumerate(dataloader):
         batch = real_audio_data.size(0)
@@ -151,6 +156,7 @@ def train_epoch(
         optimizer_C.step()
 
         total_c_loss += c_loss.item()
+        total_w_dist += compute_wasserstein_diff(real_validity, fake_validity).item()
 
         # Train generator every CRITIC_STEPS steps
         if i % CRITIC_STEPS == 0:
@@ -166,19 +172,29 @@ def train_epoch(
 
             total_g_loss += g_loss.item()
 
+            # # Save training progress images
+            # if i % (CRITIC_STEPS * 14) == 0:
+            #     fake_audio_to_visualize = fake_audio_data[0].cpu().detach().numpy()
+            #     graph_spectrogram(
+            #         fake_audio_to_visualize,
+            #         f"diverse_generator_epoch_{epoch_number + 1}_step_{i}.png",
+            #         True,
+            #     )
+
     avg_g_loss = total_g_loss / len(dataloader)
     avg_c_loss = total_c_loss / len(dataloader)
+    avg_w_dist = total_w_dist / len(dataloader)
 
-    scheduler_G.step(avg_g_loss)
-    scheduler_C.step(avg_c_loss)
+    scheduler_G.step()
+    scheduler_C.step()
 
-    return avg_g_loss, avg_c_loss
+    return avg_g_loss, avg_c_loss, avg_w_dist
 
 
 def validate(generator, critic, dataloader, device):
     generator.eval()
     critic.eval()
-    total_g_loss, total_c_loss = 0, 0
+    total_g_loss, total_c_loss, total_w_dist = 0, 0, 0
 
     with torch.no_grad():
         for (real_audio_data,) in dataloader:
@@ -206,8 +222,15 @@ def validate(generator, critic, dataloader, device):
 
             total_g_loss += g_loss.item()
             total_c_loss += c_loss.item()
+            total_w_dist += compute_wasserstein_diff(
+                real_validity, fake_validity
+            ).item()
 
-    return total_g_loss / len(dataloader), total_c_loss / len(dataloader)
+    return (
+        total_g_loss / len(dataloader),
+        total_c_loss / len(dataloader),
+        total_w_dist / len(dataloader),
+    )
 
 
 def training_loop(train_loader, val_loader):
@@ -217,15 +240,22 @@ def training_loop(train_loader, val_loader):
     optimizer_G = RMSprop(generator.parameters(), lr=LR_G, weight_decay=0.05)
     optimizer_C = RMSprop(critic.parameters(), lr=LR_C, weight_decay=0.05)
 
-    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.5, patience=5)
-    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.5, patience=5)
+    LR_DECAY = 0.9
+    scheduler_G = ExponentialLR(optimizer_G, gamma=LR_DECAY)
+    scheduler_C = ExponentialLR(optimizer_C, gamma=LR_DECAY)
 
     # Train
     device = get_device()
     generator.to(device)
     critic.to(device)
+
+    best_val_w_dist = float("inf")  # Initialize
+    epochs_no_improve = 0
+    patience = 3  # epochs
+    warmup = 4  # epochs
     for epoch in range(N_EPOCHS):
-        train_g_loss, train_c_loss = train_epoch(
+        # Train
+        train_g_loss, train_c_loss, train_w_dist = train_epoch(
             generator,
             critic,
             train_loader,
@@ -234,22 +264,22 @@ def training_loop(train_loader, val_loader):
             scheduler_G,
             scheduler_C,
             device,
+            epoch,
         )
-
         print(
-            f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}"
+            f"[{epoch+1}/{N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}, W Dist: {train_w_dist:.6f}"
         )
 
-        # Validation and saving
-        early_exit_loss_thresh = 0.2
-        early_exit_condition = np.abs(train_g_loss) <= early_exit_loss_thresh
+        # Validate
+        val_g_loss, val_c_loss, val_w_dist = validate(
+            generator, critic, val_loader, device
+        )
+        print(
+            f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
+        )
 
-        if (epoch + 1) % VALIDATION_INTERVAL == 0 or early_exit_condition is True:
-            val_g_loss, val_c_loss = validate(generator, critic, val_loader, device)
-            print(
-                f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}"
-            )
-
+        # Generate example audio
+        if (epoch + 1) % SHOW_GENERATED_INTERVAL == 0:
             examples_to_generate = 3
             z = torch.randn(examples_to_generate, LATENT_DIM, 1, 1).to(device)
             generated_audio = generator(z).squeeze()
@@ -261,10 +291,15 @@ def training_loop(train_loader, val_loader):
                     f"Epoch {epoch + 1} Generated Audio #{i + 1}",
                 )
 
-        # Save model
-        if (epoch + 1) % SAVE_INTERVAL == 0 or early_exit_condition is True:
-            print(
-                f"Training stopped at epoch {epoch+1}, Final g_loss: {train_g_loss:.6f}"
-            )
-            save_model(generator, "StereoSampleGAN-Kick")
-            break
+        # Early exit/saving
+        if (epoch + 1) >= warmup:
+            save_model(generator)
+            if np.abs(val_w_dist) < best_val_w_dist:
+                best_val_w_dist = np.abs(val_w_dist)
+                epochs_no_improve = 0
+            else:
+                epochs_no_improve += 1
+                print(f"epochs without w_dist improvement: {epochs_no_improve}")
+                if epochs_no_improve >= patience:
+                    print("Early stopping triggered")
+                    break

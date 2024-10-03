@@ -1,29 +1,33 @@
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 import librosa
 import numpy as np
-import os
 import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
-from scipy.signal import convolve2d
 
+from usage_params import (
+    training_sample_length,
+    outputs_dir,
+)
 from utils.file_helpers import (
     GLOBAL_SR,
-    outputs_dir,
-    compiled_data_path,
     delete_DSStore,
     save_audio,
     save_loudness_data,
 )
 
-
 # Constants
-AUDIO_SAMPLE_LENGTH = 0.6  # 600 ms
 N_CHANNELS = 2  # Left, right
 DATA_SHAPE = 256
 
 # STFT Helpers
 GLOBAL_WIN = 510
-GLOBAL_HOP = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR) // (DATA_SHAPE - 1)
+GLOBAL_HOP = int(training_sample_length * GLOBAL_SR) // (DATA_SHAPE - 1)
 window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
@@ -51,7 +55,7 @@ def audio_to_norm_db(channel_info):
     return np.array(stereo_loudness_info)  # OUT: Frames, Freq Bins in norm dB
 
 
-def norm_db_to_audio(loudness_info):
+def norm_db_to_audio(loudness_info, len_audio_in):
     # IN: Frames, Freq Bins in norm dB
     stereo_audio = []
 
@@ -59,7 +63,7 @@ def norm_db_to_audio(loudness_info):
         data = scale_data_to_range(loudness_info[i], -40, 40)
         data[data < -35] = -40  # Noise gate
         magnitudes = librosa.db_to_amplitude(data)
-        istft = griffin_lim_istft(magnitudes)
+        istft = griffin_lim_istft(magnitudes, len_audio_in)
         stereo_audio.append(istft)
 
     stereo_audio = np.array(stereo_audio)
@@ -67,9 +71,11 @@ def norm_db_to_audio(loudness_info):
     return stereo_audio
 
 
-def griffin_lim_istft(channel_magnitudes):
+def griffin_lim_istft(channel_magnitudes, len_audio_in):
     iterations = 10
     momentum = 0.99
+
+    hop = int(len_audio_in * GLOBAL_SR) // (DATA_SHAPE - 1)
 
     angles = np.exp(2j * np.pi * np.random.rand(*channel_magnitudes.shape))
     stft = channel_magnitudes.astype(np.complex64) * angles
@@ -77,14 +83,12 @@ def griffin_lim_istft(channel_magnitudes):
     for i in range(iterations):
         y = librosa.istft(
             stft.T,
-            hop_length=GLOBAL_HOP,
+            hop_length=hop,
             win_length=GLOBAL_WIN,
             window=window,
             center=True,
         )
-        y = librosa.util.fix_length(
-            y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=0
-        )
+        y = librosa.util.fix_length(y, size=int(len_audio_in * GLOBAL_SR), axis=0)
 
         if i > 0:
             y = momentum * y + (1 - momentum) * y_prev
@@ -93,7 +97,7 @@ def griffin_lim_istft(channel_magnitudes):
         stft = librosa.stft(
             y,
             n_fft=GLOBAL_WIN,
-            hop_length=GLOBAL_HOP,
+            hop_length=hop,
             win_length=GLOBAL_WIN,
             window=window,
             center=True,
@@ -122,11 +126,11 @@ def load_audio(path):
     y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
     if y.ndim == 1:
         y = np.stack((y, y), axis=0)
-    y = librosa.util.fix_length(y, size=int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR), axis=1)
+    y = librosa.util.fix_length(y, size=int(training_sample_length * GLOBAL_SR), axis=1)
     return y
 
 
-def encode_sample_directory(sample_dir, visualize=True):
+def encode_sample_directory(sample_dir, output_dir, visualize=True):
     delete_DSStore(sample_dir)
     real_data = []
 
@@ -135,14 +139,20 @@ def encode_sample_directory(sample_dir, visualize=True):
         for sample_name in all_samples:
             sample_path = os.path.join(root, sample_name)
 
-            y = load_audio(sample_path)
+            try:
+                y = load_audio(sample_path)
+            except:
+                print("Error loading sample:", sample_path)
+                print("Remove sample and regenerate training data to continue.")
+                break
+
             loudness_data = audio_to_norm_db(y)
             real_data.append(loudness_data)
 
             if visualize is True and np.random.rand() < 0.005:
                 graph_spectrogram(loudness_data, sample_name)
 
-    save_loudness_data(real_data, compiled_data_path)
+    save_loudness_data(real_data, output_dir)
 
 
 def scale_data_to_range(data, new_min, new_max):
@@ -155,7 +165,7 @@ def scale_data_to_range(data, new_min, new_max):
 
 
 # Validation helpers
-def graph_spectrogram(audio_data, sample_name):
+def graph_spectrogram(audio_data, sample_name, save=False):
     fig = sp.make_subplots(rows=2, cols=1)
 
     for i in range(2):
@@ -186,16 +196,20 @@ def graph_spectrogram(audio_data, sample_name):
         )
     )
     fig.update_layout(title_text=f"{sample_name}")
-    fig.show()
+
+    if save is False:
+        fig.show()
+    else:
+        fig.write_image(f"outputs/training_progress/{sample_name}")
 
 
 def generate_sine_impulses(num_impulses=1, outPath="model"):
     amplitude = 1
     for i in range(num_impulses):
-        t = np.arange(0, AUDIO_SAMPLE_LENGTH, 1 / GLOBAL_SR)
+        t = np.arange(0, training_sample_length, 1 / GLOBAL_SR)
         freq = np.random.uniform(0, 20000)
         audio_wave = amplitude * np.sin(2 * np.pi * freq * t)
-        num_samples = int(AUDIO_SAMPLE_LENGTH * GLOBAL_SR)
+        num_samples = int(training_sample_length * GLOBAL_SR)
         audio_signal = np.zeros(num_samples)
 
         audio_wave = audio_wave[:num_samples]
@@ -205,13 +219,13 @@ def generate_sine_impulses(num_impulses=1, outPath="model"):
         save_audio(save_path, audio_signal)
 
 
-def stft_and_istft(path, file_name):
+def stft_and_istft(path, file_name, len_audio_in):
     # Load data
     y = load_audio(path)
 
     # Process data
     stft = audio_to_norm_db(y)
-    istft = norm_db_to_audio(stft)
+    istft = norm_db_to_audio(stft, len_audio_in)
     vis_istft = audio_to_norm_db(istft)
 
     # Visualize/save data

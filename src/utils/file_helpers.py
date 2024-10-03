@@ -3,11 +3,9 @@ import os
 import torch
 import soundfile as sf
 
+from usage_params import model_save_path
+
 # Constants
-audio_data_dir = "data/kick_samples"
-compiled_data_path = "data/compiled_data.npy"
-average_spectrogram_path = "data/average_spectrogram.npy"
-outputs_dir = "outputs"
 GLOBAL_SR = 44100
 
 
@@ -24,13 +22,13 @@ def save_audio(save_path, audio):
     sf.write(save_path, audio.T, GLOBAL_SR)
 
 
-def save_model(model, name):
+def save_model(model):
     # Save model
     torch.save(
         model.state_dict(),
-        f"{outputs_dir}/{name}.pth",
+        model_save_path,
     )
-    print(f"Model Saved")
+    print(f"Model saved at {model_save_path}")
 
 
 def get_device():
