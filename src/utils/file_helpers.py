@@ -3,9 +3,10 @@ import os
 import torch
 import soundfile as sf
 
-from usage_params import model_save_path
+from usage_params import UsageParams
 
 # Constants
+params = UsageParams()
 GLOBAL_SR = 44100
 
 
@@ -26,9 +27,9 @@ def save_model(model):
     # Save model
     torch.save(
         model.state_dict(),
-        model_save_path,
+        params.model_save_path,
     )
-    print(f"Model saved at {model_save_path}")
+    print(f"Model saved at {params.model_save_path}")
 
 
 def get_device():

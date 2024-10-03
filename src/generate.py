@@ -6,4 +6,4 @@ from usage_params import (
 
 
 # Generate based on usage_params
-generate_audio(model_to_generate_with, training_sample_length)
+generate_audio(model_to_generate_with, training_sample_length, True)

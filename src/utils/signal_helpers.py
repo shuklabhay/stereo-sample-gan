@@ -10,10 +10,7 @@ import plotly.graph_objects as go
 import plotly.subplots as sp
 import scipy
 
-from usage_params import (
-    training_sample_length,
-    outputs_dir,
-)
+from usage_params import UsageParams
 from utils.file_helpers import (
     GLOBAL_SR,
     delete_DSStore,
@@ -26,8 +23,9 @@ N_CHANNELS = 2  # Left, right
 DATA_SHAPE = 256
 
 # STFT Helpers
+params = UsageParams()
 GLOBAL_WIN = 510
-GLOBAL_HOP = int(training_sample_length * GLOBAL_SR) // (DATA_SHAPE - 1)
+GLOBAL_HOP = int(params.training_sample_length * GLOBAL_SR) // (DATA_SHAPE - 1)
 window = scipy.signal.windows.kaiser(GLOBAL_WIN, beta=12)
 
 
@@ -126,7 +124,9 @@ def load_audio(path):
     y, sr = librosa.load(path, sr=GLOBAL_SR, mono=False)
     if y.ndim == 1:
         y = np.stack((y, y), axis=0)
-    y = librosa.util.fix_length(y, size=int(training_sample_length * GLOBAL_SR), axis=1)
+    y = librosa.util.fix_length(
+        y, size=int(params.training_sample_length * GLOBAL_SR), axis=1
+    )
     return y
 
 
@@ -165,7 +165,7 @@ def scale_data_to_range(data, new_min, new_max):
 
 
 # Validation helpers
-def graph_spectrogram(audio_data, sample_name, save=False):
+def graph_spectrogram(audio_data, sample_name, save_images=False):
     fig = sp.make_subplots(rows=2, cols=1)
 
     for i in range(2):
@@ -197,19 +197,19 @@ def graph_spectrogram(audio_data, sample_name, save=False):
     )
     fig.update_layout(title_text=f"{sample_name}")
 
-    if save is False:
+    if save_images is False:
         fig.show()
     else:
-        fig.write_image(f"outputs/training_progress/{sample_name}")
+        fig.write_image(f"outputs/spectrogram_images/{sample_name}.png")
 
 
 def generate_sine_impulses(num_impulses=1, outPath="model"):
     amplitude = 1
     for i in range(num_impulses):
-        t = np.arange(0, training_sample_length, 1 / GLOBAL_SR)
+        t = np.arange(0, params.training_sample_length, 1 / GLOBAL_SR)
         freq = np.random.uniform(0, 20000)
         audio_wave = amplitude * np.sin(2 * np.pi * freq * t)
-        num_samples = int(training_sample_length * GLOBAL_SR)
+        num_samples = int(params.training_sample_length * GLOBAL_SR)
         audio_signal = np.zeros(num_samples)
 
         audio_wave = audio_wave[:num_samples]
@@ -240,7 +240,7 @@ def stft_and_istft(path, file_name, len_audio_in):
         vis_istft.shape,
     )
 
-    save_path = os.path.join(outputs_dir, f"{file_name}.wav")
+    save_path = os.path.join(params.outputs_dir, f"{file_name}.wav")
     save_audio(save_path, istft)
 
     graph_spectrogram(stft, "stft")
