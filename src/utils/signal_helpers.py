@@ -139,7 +139,13 @@ def encode_sample_directory(sample_dir, output_dir, visualize=True):
         for sample_name in all_samples:
             sample_path = os.path.join(root, sample_name)
 
-            y = load_audio(sample_path)
+            try:
+                y = load_audio(sample_path)
+            except:
+                print("Error loading sample:", sample_path)
+                print("Remove sample and regenerate training data to continue.")
+                break
+
             loudness_data = audio_to_norm_db(y)
             real_data.append(loudness_data)
 

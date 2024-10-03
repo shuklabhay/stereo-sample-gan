@@ -25,7 +25,7 @@ Specify sample count to generate, output, etc `usage_params.py`
 Specify training data paramaters in `usage_params.py`
 
 - I reccomend anywhere between 4,000-8000 training examples, any multiple of 8 and audio
-  <1 sec long (longer hasn't been fully tested)
+  <1.5 sec long (longer hasn't been fully tested)
 - Prepare training data by running `python3 src/data_processing/encode_audio_data.py`
 - Train model by running `python3 src/stereo_sample_gan.py`
 - Generate audio (based on current `usage_params.py`) by running `python3 src/generate.py`
@@ -40,20 +40,19 @@ Training progress visualization (Diverse Kick Drum Model):
 
 Kick drum generation model trained on ~8000 essentially random kick drums.
 
-- More variation between each generated sample but audio is often inconsistent and contains some artifacts.
+- More variation between each generated sample, audio is occasionally inconsistent and contains some artifacts.
 
 ### Curated Kick Drum
 
 Kick drum generation model trained on ~4400 slightly more rigorously but still essentially randomly chosen kick drums.
 
-- Less variation between each drum sample's tone but also closer to a "normal" kick drum sound. Still noisy and sometimes but more infrequently noisy.
+- Less variation between each drum sample's tone, performs slightly better to an auditory test.
 
 ### Instrument One Shot
 
-- Instrument one shot generation model, trained on ~3000 semi-curated instrument one shots.
-- WIP
-- `model_save_name="StereoSampleGAN-InstrumentOneShot`
-- WIP
+Instrument one shot generation model, trained on ~3000 semi-curated instrument one shots.
+
+- Demonstrates model's capability to generate longer audio, yet fails to generate coherent, useable instrument one shots.
 
 ## Directories
 
