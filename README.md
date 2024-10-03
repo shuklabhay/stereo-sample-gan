@@ -2,7 +2,7 @@
 
 [![On Push](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)
 
-StereoSampleGAN: A lightweight approach high fidelity stereo audio sample generation.
+StereoSampleGAN: A computationally inexpensive approach high fidelity stereo audio sample generation.
 
 ## Model Usage
 
