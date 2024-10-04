@@ -24,7 +24,7 @@ This paper utilizes three distinct data sets engineered to measure the model's r
 
 These datasets provide robust frameworks for determining the model's response to scaled variation within training data. Most audio is sourced from online "digital audio production sample packs" which compile sounds for a wide variety of generes and use cases.
 
-## 3.2 Data processing
+## 3.2 Feature Extraction and Encoding
 
 ## 4. Model Implementation
 
