@@ -22,7 +22,7 @@ This paper utilizes three distinct data sets engineered to measure the model's r
 
 3. Instrument One Shot Set: Single note impulses capturing the tonal qualities and spectral characteristics of varying synthesizer and instrument sounds.
 
-These datasets provide robust frameworks for determining the model's response to scaled variation within training data. Most audio is sourced from online "digital audio production sample packs" which compile sounds for a wide variety of generes and use cases.
+These datasets provide robust frameworks for determining the model's response to varying amounts of variation within training data. Most audio is sourced from online "digital audio production sample packs" which compile sounds for a wide variety of generes and use cases.
 
 ## 3.2 Feature Extraction and Encoding
 
