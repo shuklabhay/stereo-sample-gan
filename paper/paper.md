@@ -36,6 +36,10 @@ When converting generated audio representations to audio, this process occurs in
 
 ### 4.1. Architecture
 
+This work utilizes a Wasserstein GAN (WGAN) some significant modifications. The generator consists of six blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation.
+
+The Critic consists of six convolution blocks, all seven utilizing spectral normalization with 2D convolution operations to stabilize training. Each block follows its convolution operation with a batch normalization, Leaky ReLU activation, and a dropout layer, except for the first and third layers. The first layer does not utilize batch normalization and the third layer includes a Linear Attention mechanism to efficiently assist the model in understanding contextual relationships within inputs. After these six operations, a final 2D convolution with spectral normalization is applied and the result is flattened.
+
 ### 4.2. Training
 
 ## 5. Results and Discussion
