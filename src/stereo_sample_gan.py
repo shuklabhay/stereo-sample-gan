@@ -12,9 +12,6 @@ from utils.file_helpers import (
 
 from usage_params import UsageParams
 
-# Constants
-LR_G = 0.003
-LR_C = 0.004
 
 # Load data
 params = UsageParams()

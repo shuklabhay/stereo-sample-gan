@@ -36,11 +36,13 @@ When converting generated audio representations to audio, this process occurs in
 
 ### 4.1. Architecture
 
-This work utilizes a Wasserstein GAN (WGAN) some significant modifications. The generator consists of six blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation.
+This work utilizes a Wasserstein GAN with gradient penalty (WGAN-GP) and additional architectural modifications. The generator passes 128 latent dimensions into six transpose convolution blocks blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation, creating a 256 by 256 representation of audio with values between -1 to 1.
 
-The Critic consists of six convolution blocks, all seven utilizing spectral normalization with 2D convolution operations to stabilize training. Each block follows its convolution operation with a batch normalization, Leaky ReLU activation, and a dropout layer, except for the first and third layers. The first layer does not utilize batch normalization and the third layer includes a Linear Attention mechanism to efficiently assist the model in understanding contextual relationships within inputs. After these six operations, a final 2D convolution with spectral normalization is applied and the result is flattened.
+The Critic consists of six convolution blocks, converting a 256 by 256 representation of audio to a single value, an approximation of the wasterstien distance. The critic utilizes seven 2D convolution blocks with spectral normalization with to stabilize training, batch normalization, a Leaky ReLU activation, and a dropout layer, except for the first layer which does not utilize batch normalization and the third layer which includes a Linear Attention mechanism to efficiently assist the model in understanding contextual relationships in feature maps. After these operations, a final 2D convolution with spectral normalization is applied and the result is flattened, returning single value wasserstein distance approximations.
 
 ### 4.2. Training
+
+The Generator and Critic are initialized with RMSprop loss optimizers. The critic is given a slightly higher learning rate, and since the model tends to learn audio generation over relatively few epochs, the RMSprop optimizers are given relatively high weight decay values.
 
 ## 5. Results and Discussion
 
