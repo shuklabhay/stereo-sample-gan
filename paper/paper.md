@@ -12,7 +12,7 @@ Existing convolutional aproaches to audio generation often are limited to produc
 
 ## 3. Data Manipulation
 
-## 3.1 Datasets
+### 3.1 Datasets
 
 This paper utilizes three distinct data sets engineered to measure the model's resilince to variation in spectral content.
 
@@ -24,11 +24,13 @@ This paper utilizes three distinct data sets engineered to measure the model's r
 
 These datasets provide robust frameworks for determining the model's response to varying amounts of variation within training data. Most audio is sourced from online "digital audio production sample packs" which compile sounds for a wide variety of generes and use cases.
 
-## 3.2 Feature Engineering
+### 3.2 Feature Engineering
 
 To simplify the taks at hand, this work represents audio as an image of frequency bins by time steps, with each pixel's intensity representing magnitude. Utilizing this spectrogram-like representation of audio eliminates the need for recurrent architectures Each audio sample is first converted into a two channel array using a standard 44100 hz sampling rate. If necessary, single channel audio is duplicated. The audio sample is then normalized to a standard length and passes into a Short-time Fourier Transform (STFT).
 
-The STFT utilizes a window size and hop length determined by the audio sample length and constant sample rate so that each resulting data point is 256 frequency bins by 256 time frames. When validating processing using pure sine signals at random frequencies, audio information was preserved to the greatest extent by using a kaiser window where a beta value of 12. Next, to preserve higher frequency information, the STFT's resulting magnitude information is converted to a decibal scale and the range of the loudness information is scaled down to the interval (-1,1). Scaling down to this interval further standardizes training audio and matches the output of the Generator, which uses a hyperbolic tangent activation. Both channels of the input audio are processed seperately and concatenated to create a two channel data point with each channel containing 256 frequency bins and 256 time steps, along with normalized loudness information at each frequency bin and time step.
+The STFT utilizes a window size and hop length determined by the audio sample length and constant sample rate so that each resulting data point is 256 frequency bins by 256 time frames. When validating processing using pure sine signals at random frequencies, audio information was preserved to the greatest extent by using a kaiser window where a beta value of 12. Next, to preserve higher frequency information, the STFT's resulting magnitude information is converted to a decibal scale and the range of the loudness information is scaled down to a range of -1 to 1. Scaling down to this interval further standardizes training audio and matches the output of the Generator, which uses a hyperbolic tangent activation. Both channels of the input audio are processed seperately and concatenated to create a two channel data point with each channel containing 256 frequency bins and 256 time steps, along with normalized loudness information at each frequency bin and time step.
+
+When converting generated audio representations to audio, this process occurs in reverse. Each channel's generated normalized loudness information is scaled up to a range of -40 to 40. A noise gate is then implemented and the decibal values are converted to magnitudes. Magnitude information is passed into a Momentum Driven Griffin-Lim Reconstruction with noise gating at each iteration, resulting in effectively recreated audio.
 
 ## 4. Model Implementation
 
