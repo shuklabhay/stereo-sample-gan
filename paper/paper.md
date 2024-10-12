@@ -10,6 +10,8 @@ Existing convolutional aproaches to audio generation often are limited to produc
 
 ## 2. Introduction
 
+mention wavenet, wavegan somewhere.
+
 ## 3. Data Manipulation
 
 ### 3.1 Datasets
@@ -42,7 +44,11 @@ The Critic consists of six convolution blocks, converting a 256 by 256 represent
 
 ### 4.2. Training
 
-The Generator and Critic are initialized with RMSprop loss optimizers. The critic is given a slightly higher learning rate, and since the model tends to learn audio generation over relatively few epochs, the RMSprop optimizers are given relatively high weight decay values.
+The Generator and Critic are initialized with RMSprop loss optimizers. The critic is given a slightly higher learning rate, and since the model tends to learn audio generation over relatively few epochs, the RMSprop optimizers are given relatively high weight decay values.This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. When training, every five steps the critic takes the generator takes a single step and validation occurs every epoch.
+
+The generator and critic both use custom loss metrics. Critic loss is a combination of the standard wasserstein distance loss found in a WGAN, gradient penalty, along with a spectral difference metric penalizing differences between generated and real audio and spectral convergence metric promoting similarities between the generated and real audio. Generator loss is the standard wasserstein distance loss and feature matching penalty computing the difference between extracted features in the real and fake audio data. Features are extracted from the critic's attention layer and the second to last convolution block.
+
+The usage of wasserstein distance based metrics is crucial here as the comparison of distributions between generated and real audio also the model to camture complexities of audio more effectively than a standard GAN. The variety of training data allows effective comparison of generated and real audio in both the generator and critic loss metrics without leading to model collapase. The training loop is also set up with an early exit condition based on wasserstein distance improvement over validation epochs.
 
 ## 5. Results and Discussion
 
