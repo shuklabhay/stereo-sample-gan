@@ -54,26 +54,37 @@ The usage of wasserstein distance based metrics is crucial here as the compariso
 
 ### 5.1. Evaluation
 
-comparison to real kicks, w dist, loss
+for kicks images look good compared to real, w_dist and loss converge fairly well
 
-all pretrained trained in under one hour using m1 cpu
+wavegan needed multiple a100s & multiple day or something and i trained in under one hour using m1 cpu
+
+- 99.5% reduction in epoch count (compared to SpecGAN)
+  - better architecutre, hone on one generating one specific type of audio = good
+
+talk abt this tradeoff between generated audio physical quality and percieved quality
+
+- not super great at learning how to make the TONE of instrument (fundamental missing on kick for ex)
+  - likely a limitation of ft bc bin size n stuff
+  - training on image reps of audio not audio so model has capability to learn random stuff audio wouldnt ever have (esp w/ one shots)
+- training computation power likely increases as shape increase (256x256)
 
 ### 5.2. Contributions
 
 main advantages:
 
-- stereo
-- 44.1khz
+- proves viability of stereo @ 44.1khz
 
 disadvantages:
 
-- not super great at learning how to make the TONe of instrument (fundamental missing)
-  - likely a limitation of ft
-  - training on image reps of audio not audio so it does random stuff audio wouldnt
-- training computation power likely increases as shape increase (256x256)
+- learn shape of image not TONE
 
 ## 6. Conclusion
 
 this model is less abt generating GOOD audio more abt showing the viability of stereo audio generation at higher sr (44.1khz)
+
+might be hard in practice just bc its 2x the computation for exact same amt of audio
+result is more lifelike, better audio
+
+might be better w/ waveform generation similar to wavenet/wavegan
 
 ## 7. References
