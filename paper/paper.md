@@ -32,7 +32,7 @@ To simplify the taks at hand, this work represents audio as an image of frequenc
 
 The STFT utilizes a window size and hop length determined by the audio sample length and constant sample rate so that each resulting data point is 256 frequency bins by 256 time frames. When validating processing using pure sine signals at random frequencies, audio information was preserved to the greatest extent by using a kaiser window where a beta value of 12. Next, to preserve higher frequency information, the STFT's resulting magnitude information is converted to a decibal scale and the range of the loudness information is scaled down to a range of -1 to 1. Scaling down to this interval further standardizes training audio and matches the output of the Generator, which uses a hyperbolic tangent activation. Both channels of the input audio are processed seperately and concatenated to create a two channel data point with each channel containing 256 frequency bins and 256 time steps, along with normalized loudness information at each frequency bin and time step.
 
-When converting generated audio representations to audio, this process occurs in reverse. Each channel's generated normalized loudness information is scaled up to a range of -40 to 40. A noise gate is then implemented and the decibal values are converted to magnitudes. Magnitude information is passed into a Momentum Driven Griffin-Lim Reconstruction with noise gating at each iteration, resulting in effectively recreated audio.
+When converting generated audio representations to audio, this process occurs in reverse. Each channel's generated normalized loudness information is scaled up to a range of -40 to 40. A noise gate is then implemented and the decibal values are converted to magnitudes. Magnitude information is passed into 10 iterations of a Momentum Driven Griffin-Lim Reconstruction with noise gating at each iteration, resulting in effectively recreated audio.
 
 ## 4. Model Implementation
 
@@ -44,17 +44,17 @@ The Critic consists of six convolution blocks, converting a 256 by 256 represent
 
 ### 4.2. Training
 
-The Generator and Critic are initialized with RMSprop loss optimizers. The critic is given a slightly higher learning rate, and since the model tends to learn audio generation over relatively few epochs, the RMSprop optimizers are given relatively high weight decay values.This work uses 80% of the dataset as training data and 20% as validation with all data split into batches of 16. When training, every five steps the critic takes the generator takes a single step and validation occurs every epoch.
+This work uses 80% of each dataset as training data and 20% as validation with all data split into batches of 16. The Generator and Critic are initialized with RMSprop loss optimizers where the critic is given a slightly higher learning rate. Since the model tends to learn audio representation patterns in relatively few epochs, training is smoothened by initializing the RMSprop optimizers with relatively high weight decay and exponential LR decay. The Generator only a step every five Critic steps, validation occurs every epoch, and early exit is based on validation wasserstein distance improvement over epochs.
 
-The generator and critic both use custom loss metrics. Critic loss is a combination of the standard wasserstein distance loss found in a WGAN, gradient penalty, along with a spectral difference metric penalizing differences between generated and real audio and spectral convergence metric promoting similarities between the generated and real audio. Generator loss is the standard wasserstein distance loss and feature matching penalty computing the difference between extracted features in the real and fake audio data. Features are extracted from the critic's attention layer and the second to last convolution block.
+The generator and critic both use custom loss metrics to better understand and recreate audio representation patterns. Critic loss is a combination of the standard wasserstein distance loss found in a WGAN, gradient penalty, along with a spectral difference metric penalizing differences between generated and real audio and spectral convergence metric promoting similarities between the generated and real audio. Generator loss is the standard wasserstein distance loss and feature matching penalty computing the difference between extracted features in the real and fake audio data. Features are extracted from the critic's attention layer and the second to last convolution block.
 
-The usage of wasserstein distance based metrics is crucial here as the comparison of distributions between generated and real audio also the model to camture complexities of audio more effectively than a standard GAN. The variety of training data allows effective comparison of generated and real audio in both the generator and critic loss metrics without leading to model collapase. The training loop is also set up with an early exit condition based on wasserstein distance improvement over validation epochs.
+The usage of wasserstein distance based metrics is crucial here as the comparison of distributions between generated and real audio also the model to capture complexities of audio more effectively than a standard GAN. The variety of training data allows effective comparison of generated and real audio in both the generator and critic loss metrics without leading to model collapse.
 
-## 5. Results and Discussion
+## 5. Evalutation
 
-### 5.1. Evaluation
+### 5.1. Results and Discussion
 
-for kicks images look good compared to real, w_dist and loss converge fairly well
+For both kick drum models, impressive results are achieved.
 
 wavegan needed multiple a100s & multiple day or something and i trained in under one hour using m1 cpu
 
