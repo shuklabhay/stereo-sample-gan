@@ -6,7 +6,7 @@ UCLA
 
 ## 1. Abstract
 
-Existing convolutional aproaches to audio generation often are limited to producing low-fidelity, monophonic audio, while demanding significant computational resources for both training and inference. To display the viability of stereo audio generation at higher sample rates, this work introduces StereoSampleGAN, a novel audio generation architecture that combines a Deep Convolutional Wasserstein GAN (WGAN), attention mechanisms, and loss optimization techniques. StereoSampleGAN allows high-fidelity, stereo audio generation for audio samples while being remaining computationally efficient. Training on three distinct sample datasets of image representations of audio with varying spectral overlap – two of kick drums and one of tonal one shots – StereoSampleGAN demonstrates promising results in generating high quality simple stereo sounds. It also displays notable limiatations in achieving optimal tonal qualities and spectral characteristics. These results indicate areas for improvement to this approach of audio generation but highlight the viability of high quality, stereo audio generation.
+Existing convolutional aproaches to audio generation often are limited to producing low-fidelity, monophonic audio, while demanding significant computational resources for both training and inference. To display the viability of stereo audio generation at higher sample rates, this work introduces StereoSampleGAN, a novel audio generation architecture that combines a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechanisms, and loss optimization techniques. StereoSampleGAN allows high-fidelity, stereo audio generation for audio samples while being remaining computationally efficient. Training on three distinct sample datasets of image representations of audio with varying spectral overlap – two of kick drums and one of tonal one shots – StereoSampleGAN demonstrates promising results in generating high quality simple stereo sounds. It also displays notable limiatations in achieving optimal tonal qualities and spectral characteristics. These results indicate areas for improvement to this approach of audio generation but highlight the viability of high quality, stereo audio generation.
 
 ## 2. Introduction
 
@@ -40,7 +40,9 @@ When converting generated audio representations to audio, this process occurs in
 
 This work utilizes a Wasserstein GAN with gradient penalty (WGAN-GP) and additional architectural modifications. The generator passes 128 latent dimensions into six transpose convolution blocks blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation, creating a 256 by 256 representation of audio with values between -1 to 1.
 
-The Critic consists of six convolution blocks, converting a 256 by 256 representation of audio to a single value, an approximation of the wasterstien distance. The critic utilizes seven 2D convolution blocks with spectral normalization with to stabilize training, batch normalization, a Leaky ReLU activation, and a dropout layer, except for the first layer which does not utilize batch normalization and the third layer which includes a Linear Attention mechanism to efficiently assist the model in understanding contextual relationships in feature maps. After these operations, a final 2D convolution with spectral normalization is applied and the result is flattened, returning single value wasserstein distance approximations.
+The Critic consists of six convolution blocks, converting a 256 by 256 representation of audio to a single value, an approximation of the wasterstien distance. The critic utilizes seven 2D convolution blocks with spectral normalization with to stabilize training, batch normalization, a Leaky ReLU activation, and a dropout layer, except for the first layer which does not utilize batch normalization and the third layer which includes a Linear Attention mechanism to assist the model in understanding contextual relationships in feature maps and prevenent the checkerboard issue audio generation is often plagued with. After these operations, a final 2D convolution with spectral normalization is applied and the result is flattened, returning single value wasserstein distance approximations.
+
+\*\*\* FIND A CITATION FOR CHECKERBOARD ISSUE
 
 ### 4.2. Training
 
@@ -50,41 +52,22 @@ The generator and critic both use custom loss metrics to better understand and r
 
 The usage of wasserstein distance based metrics is crucial here as the comparison of distributions between generated and real audio also the model to capture complexities of audio more effectively than a standard GAN. The variety of training data allows effective comparison of generated and real audio in both the generator and critic loss metrics without leading to model collapse.
 
-## 5. Evalutation
+## 5. Results and Discussion
 
-### 5.1. Results and Discussion
+In all training cases, the model converged to a solution in 4-7 epochs with custom loss metrics and wasserstein distance converging to absolute values under 2. Compared to the most similar existing audio generation architecture, SpecGAN, this model presents a 99.60-99.77% reduction in training epoch count.
 
-For both kick drum models, impressive results are achieved.
+Despite the incredibly efficient model solution convergence, the fourier transform based audio representation generation approach has inherit limitations. The 256 frequency bin by 256 time frame resolution limits spectral variation and temporal resolution. Kick drums aren't affected by this isssue since they are short impulses which contain variation between decaying natures and tones, but they still maintain the overall same "shape."
 
-wavegan needed multiple a100s & multiple day or something and i trained in under one hour using m1 cpu
+On the other hand, when generating instrument one shots (bass instruments, real instruments, synthesized sounds, etc; all sounds that inherently even greater amounts of spectral variation than kick drums), the limitations of this approach manifest themselves as the model fails to learn how to create one specific type of instrument sound, understanding the decaying pattern instrument shots usually follow but not replicating the necessary tonal characteristics to be categorized as one specific sound.
 
-- 99.5% reduction in epoch count (compared to SpecGAN)
-  - better architecutre, hone on one generating one specific type of audio = good
+[figure of data pts, kick drums kinda similar but instruments WILDLY different]
 
-talk abt this tradeoff between generated audio physical quality and percieved quality
+Additionally, the kick drum generation models result in audio where even though the generated image representations appear to contain ample variation, the audio itself usually sounds tonally similar with different decay patterns. The cause for this can again be traced back to the fourier transform based audio representation, which represent all frequencies in equal frequency bin subdivisions, meaning each data point represents all low end information as one bin and therefore one frequency, regardless of variations in fundamental frequencies in training examples. The inverse STFT function, despite heavy optimization in this work, likely still perpetuates audio loss in the recreation of audio signals from magnitude information.
 
-- not super great at learning how to make the TONE of instrument (fundamental missing on kick for ex)
-  - likely a limitation of ft bc bin size n stuff
-  - training on image reps of audio not audio so model has capability to learn random stuff audio wouldnt ever have (esp w/ one shots)
-- training computation power likely increases as shape increase (256x256)
-
-### 5.2. Contributions
-
-main advantages:
-
-- proves viability of stereo @ 44.1khz
-
-disadvantages:
-
-- learn shape of image not TONE
+These findings suggest that the model is capable of learning and generating different sounds in the same category but this method of audio representation prevents the model from achieving peak performance
 
 ## 6. Conclusion
 
-this model is less abt generating GOOD audio more abt showing the viability of stereo audio generation at higher sr (44.1khz)
-
-might be hard in practice just bc its 2x the computation for exact same amt of audio
-result is more lifelike, better audio
-
-might be better w/ waveform generation similar to wavenet/wavegan
+This model architecture provides important contributions to the field of audio generation: iot displays an impressive stereo audio generation model utilizing higher sample rates than previous methods while achieving a remarkable 99.77% reduction in training epoch count and finds utilizing Linear Attention Mechanisms in the discriminator/critic, RMSProp Optimizers and a WGAN-GP Architecture to be effective in solving the checkerboard model collapse issue with a minimal impact on computational cost. Despite these findings, the fourier transform based audio representation likely inhibits the full potential of this architecture due spectral and temporal resolution limitations and lossy signal recreation. These issues can likely be solved by representing audio in a more meaningful way such as raw waveforms or time-frequency information containing logarithmically calculated frequeny bins. By providing the inital step to achieving high quality stereo audio while decreasing computational cost, this work hopes to inspire further development in the generation of stero audio.
 
 ## 7. References
