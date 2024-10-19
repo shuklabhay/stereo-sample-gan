@@ -6,11 +6,16 @@ UCLA
 
 ## 1. Abstract
 
-Existing convolutional aproaches to audio generation often are limited to producing low-fidelity, monophonic audio, while demanding significant computational resources for both training and inference. To display the viability of stereo audio generation at higher sample rates, this work introduces StereoSampleGAN, a novel audio generation architecture that combines a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechanisms, and loss optimization techniques. StereoSampleGAN allows high-fidelity, stereo audio generation for audio samples while being remaining computationally efficient. Training on three distinct sample datasets of image representations of audio with varying spectral overlap – two of kick drums and a more complex dataset of tonal one shots – StereoSampleGAN demonstrates promising results in generating high quality stereo sounds but also displays notable limiatations in achieving optimal tonal qualities and spectral characteristics. These results indicate areas for improvement to this approach of audio generation but highlight the viability of high quality, stereo audio generation.
+Existing convolutional aproaches to audio generation often are limited to producing low-fidelity, monophonic audio, while demanding significant computational resources for both training and inference. To display the viability of stereo audio generation at higher sample rates, this work introduces StereoSampleGAN, a novel audio generation architecture that combines a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechanisms, and loss optimization techniques. StereoSampleGAN allows high-fidelity, stereo audio generation for audio samples while being remaining computationally efficient. Training on three distinct sample datasets of image representations of audio with varying spectral overlap – two of kick drums and a more complex dataset of tonal one shots – StereoSampleGAN demonstrates a massive reduction in computational cost and promising results in generating high quality stereo sounds but also displays notable limiatations in achieving optimal tonal qualities and spectral characteristics. These results indicate areas for improvement to this approach of audio generation but highlight the viability of high quality, stereo audio generation.
 
 ## 2. Introduction
 
-mention wavenet, wavegan somewhere.
+- audio generation is an more complex problem than image generation
+  - to sound real needs high quality, lots of factors
+  - mention checkerbaord somewhere
+- stuff like wavenet wavegan waveflow exist, but stereo + low sr
+- goal is to make computationally inexpensive audio generator which is stereo & high sr
+- will use Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechs, custom loss metrics to train on 3 datasets and produce distinct stereo audio w/ substantial reduction in train time
 
 ## 3. Data Manipulation
 
