@@ -2,7 +2,7 @@
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
-UCLA
+Leland High School
 
 ## 1. Abstract
 
