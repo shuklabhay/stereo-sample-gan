@@ -12,7 +12,7 @@ from utils.signal_helpers import graph_spectrogram
 
 # Training params
 N_EPOCHS = 14
-SHOW_GENERATED_INTERVAL = int(N_EPOCHS / 3)
+SHOW_GENERATED_INTERVAL = int(N_EPOCHS / 4)
 SAVE_INTERVAL = int(N_EPOCHS / 1)
 
 LR_G = 0.003
