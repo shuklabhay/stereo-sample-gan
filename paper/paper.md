@@ -12,7 +12,7 @@ Existing convolutional aproaches to audio generation often are limited to produc
 
 - audio generation is an more complex problem than image generation
   - to sound real needs high quality, lots of factors
-  - mention checkerbaord somewhere
+  - mention checkerbaord somewhere (https://distill.pub/2016/deconv-checkerboard/)
 - stuff like wavenet wavegan waveflow exist, but stereo + low sr
 - goal is to make computationally inexpensive audio generator which is stereo & high sr
 - will use Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechs, custom loss metrics to train on 3 datasets and produce distinct stereo audio w/ substantial reduction in train time
