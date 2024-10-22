@@ -10,11 +10,23 @@ Existing convolutional aproaches to audio generation often are limited to produc
 
 ## 1. Introduction
 
-Audio generation by nature is an infinitely more complex problem than image generation due to a few key reasons. Audio often requires high sample rates, meaning data often requires more power to process; the human ear is naturally more sensitive to audio, meaning artifacts can destroy the perceptual quality of audio; and high-quality datasets are sparse. These issues are often addressed by audio generation models such as WaveNet[1] and WaveGAN/SpecGAN[2] by reducing the sample rate of training data and limiting the model to single channel audio.
+Audio generation by nature is an infinitely more complex problem than image generation due to a few key reasons. Audio often requires high sample rates, meaning data often requires more power to process; the human ear is naturally more sensitive to audio, meaning artifacts can destroy the perceptual quality of audio; and high-quality datasets are sparse. These issues are often addressed by reducing the sample rate of training data and limiting the model to single channel audio, efficiently generating audio but losing audio quality.
 
 This work aims to maintain or decrease computational cost while addressing this audio quality tradeoff, namely creating a robust framework for stereo audio generation. This work also addresses the checkerboard artifact issue[3] found in this application of transposed convolutions. To achieve these results, we will utilize a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), linear attention mechanisms, and custom loss metrics to train over three datasets and produce distinct stereo audio with a substantial reduction in training time and parameter count.
 
 ## 2. Related Works
+
+### 2.1 WaveNet
+
+WaveNet is one of the foundational audio generative models. It utilizes a DNN with dialated casual convolutions to effectively generate audio with regards to temporal structure. The model itself learns to predict the
+
+audio generation models such as WaveNet[1] and WaveGAN/SpecGAN[2]
+
+### 2.2 SpecGAN/WaveGAN
+
+### 2.3 WGAN-GP
+
+### 2.4 Spectrogram-based Audio Generation
 
 ## 3. Data Manipulation
 
