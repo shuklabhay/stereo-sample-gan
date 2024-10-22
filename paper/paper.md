@@ -4,15 +4,17 @@ Abhay Shukla\
 abhayshuklavtr@gmail.com\
 Leland High School
 
-## 1. Abstract
+## Abstract
 
 Existing convolutional aproaches to audio generation often are limited to producing low-fidelity, monophonic audio, while demanding significant computational resources for both training and inference. To display the viability of stereo audio generation at higher sample rates, this work introduces StereoSampleGAN, a novel audio generation architecture that combines a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechanisms, and loss optimization techniques. StereoSampleGAN allows high-fidelity, stereo audio generation for audio samples while being remaining computationally efficient. Training on three distinct sample datasets of image representations of audio with varying spectral overlap – two of kick drums and a more complex dataset of tonal one shots – StereoSampleGAN demonstrates a massive reduction in computational cost (training time, parameters) and promising results in generating high quality stereo sounds but also displays notable limiatations in achieving optimal tonal qualities and spectral characteristics. These results indicate areas for improvement to this approach of audio generation but highlight the viability of high quality, stereo audio generation.
 
-## 2. Introduction
+## 1. Introduction
 
 Audio generation by nature is an infinitely more complex problem than image generation due to a few key reasons. Audio often requires high sample rates, meaning data often requires more power to process; the human ear is naturally more sensitive to audio, meaning artifacts can destroy the perceptual quality of audio; and high-quality datasets are sparse. These issues are often addressed by audio generation models such as WaveNet[1] and WaveGAN/SpecGAN[2] by reducing the sample rate of training data and limiting the model to single channel audio.
 
 This work aims to maintain or decrease computational cost while addressing this audio quality tradeoff, namely creating a robust framework for stereo audio generation. This work also addresses the checkerboard artifact issue[3] found in this application of transposed convolutions. To achieve these results, we will utilize a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), linear attention mechanisms, and custom loss metrics to train over three datasets and produce distinct stereo audio with a substantial reduction in training time and parameter count.
+
+## 2. Related Works
 
 ## 3. Data Manipulation
 
