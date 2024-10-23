@@ -6,27 +6,25 @@ Leland High School
 
 ## Abstract
 
-Existing convolutional aproaches to audio generation often are limited to producing low-fidelity, monophonic audio, while demanding significant computational resources for both training and inference. To display the viability of stereo audio generation at higher sample rates, this work introduces StereoSampleGAN, a novel audio generation architecture that combines a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechanisms, and loss optimization techniques. StereoSampleGAN allows high-fidelity, stereo audio generation for audio samples while being remaining computationally efficient. Training on three distinct sample datasets of image representations of audio with varying spectral overlap – two of kick drums and a more complex dataset of tonal one shots – StereoSampleGAN demonstrates a massive reduction in computational cost (training time, parameters) and promising results in generating high quality stereo sounds but also displays notable limiatations in achieving optimal tonal qualities and spectral characteristics. These results indicate areas for improvement to this approach of audio generation but highlight the viability of high quality, stereo audio generation.
+Existing convolutional aproaches, like WaveNet, while capable of audio generation, are often limited to producing low-fidelity, monophonic audio, while demanding significant computational resources, limiting their practical application and signal quality. To display the viability of stereo audio generation at higher sample rates without incurring massive computational cost, this work introduces StereoSampleGAN, a novel audio generation architecture that combines a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), attention mechanisms, and loss optimization techniques. StereoSampleGAN allows high-fidelity, stereo audio generation for audio samples while being remaining computationally efficient. Training on three distinct sample datasets of image representations of audio with varying spectral overlap – two of kick drums and a more complex dataset of tonal one shots – StereoSampleGAN demonstrates a massive reduction in computational cost (training time, parameters) and promising results in generating high quality stereo sounds but also displays notable limiatations in achieving optimal tonal qualities and spectral characteristics. These results indicate areas for improvement to this approach of audio generation but highlight the viability of high quality, stereo audio generation.
 
 ## 1. Introduction
 
 Audio generation by nature is an infinitely more complex problem than image generation due to a few key reasons. Audio often requires high sample rates, meaning data often requires more power to process; the human ear is naturally more sensitive to audio, meaning artifacts can destroy the perceptual quality of audio; and high-quality datasets are sparse. These issues are often addressed by reducing the sample rate of training data and limiting the model to single channel audio, efficiently generating audio but losing audio quality.
 
-This work aims to maintain or decrease computational cost while addressing this audio quality tradeoff, namely creating a robust framework for stereo audio generation. This work also addresses the checkerboard artifact issue[3] found in this application of transposed convolutions. To achieve these results, we will utilize a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), linear attention mechanisms, and custom loss metrics to train over three datasets and produce distinct stereo audio with a substantial reduction in training time and parameter count.
+This work aims to maintain or decrease computational cost while addressing this audio quality tradeoff, namely creating a robust framework for stereo audio generation. This work also addresses the checkerboard artifact issue[3] found in this application of transposed convolutions. To achieve these results, we will utilize a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), linear attention mechanisms, and custom loss metrics to train over three datasets on a single Apple M1 CPU and produce distinct stereo audio with a substantial reduction in training time and parameter count.
 
 ## 2. Related Works
 
 ### 2.1 WaveNet
 
-WaveNet is one of the foundational audio generative models. It utilizes a DNN with dialated casual convolutions to effectively generate audio with regards to temporal structure. The model itself learns to predict the
-
-audio generation models such as WaveNet[1] and WaveGAN/SpecGAN[2]
+WaveNet[1] is an autoregressive DNN which utilizes dialated casual convolutions to predict each audio sample based on the existing sequence. Despite its impressive generation capabilites, its effectiveness is limited by its autoregressive nature and data representation. By directly utilizing the waveform of the audio, this work is able to capture fine details of the signal and avoid lossy reconstruction, but these benefits come at the cost of efficiency. The WaveNet architecture is compatible of high fidelity audio generation at a 44.1 KHz sample rate, but the standard WaveNet architecture does not utilize this due to constraints at the time. Subsequent work has also explored stereo audio generation with WaveNet based architectures, but StereoSampleGAN directly addresses stereo audio generation at the model's core.
 
 ### 2.2 SpecGAN/WaveGAN
 
-### 2.3 WGAN-GP
+WaveGAN and SpecGAN[2]
 
-### 2.4 Spectrogram-based Audio Generation
+- no 44.1khz no stereo
 
 ## 3. Data Manipulation
 
@@ -44,7 +42,7 @@ These datasets provide robust frameworks for determining the model's response to
 
 ### 3.2 Feature Engineering
 
-To simplify the taks at hand, this work represents audio as an image of frequency bins by time steps, with each pixel's intensity representing magnitude. This spectrogram-like representation of audio contains almost all the information as pure waveform information with the benefit of having a lower dimensionality and potentially more effectively capruting temporal dependencies. Utilizing this spectrogram-like representation of audio also eliminates the need for recurrent architectures, but the semi-invertable nature of Fourier transforms introduces an avenue for potentially significant information loss. Each audio sample is first converted into a two channel array using a standard 44100 hz sampling rate. If necessary, single channel audio is duplicated. The audio sample is then normalized to a standard length and passes into a Short-time Fourier Transform (STFT).
+To simplify the taks at hand, this work represents audio as an image of frequency bins by time steps, with each pixel's intensity representing magnitude. This spectrogram-like representation of audio contains almost all the information as pure waveform information with the benefit of having a lower dimensionality and potentially more effectively capruting temporal dependencies. Utilizing this spectrogram-like representation of audio also eliminates the need for recurrent architectures, but the semi-invertable nature of Fourier transforms introduces an avenue for potentially significant information loss. Each audio sample is first converted into a two channel array using a standard 44100 KHz sample rate. If necessary, single channel audio is duplicated. The audio sample is then normalized to a standard length and passes into a Short-time Fourier Transform (STFT).
 
 The STFT utilizes a window size and hop length determined by the audio sample length and constant sample rate so that each resulting data point is 256 frequency bins by 256 time frames. When validating processing using pure sine signals at random frequencies, audio information was preserved to the greatest extent by using a kaiser window where a beta value of 12. Next, to preserve higher frequency information, the STFT's resulting magnitude information is converted to a decibal scale and the range of the loudness information is scaled down to a range of -1 to 1. Scaling down to this interval further standardizes training audio and matches the output of the Generator, which uses a hyperbolic tangent activation. Both channels of the input audio are processed seperately and concatenated to create a two channel data point with each channel containing 256 frequency bins and 256 time steps, along with normalized loudness information at each frequency bin and time step.
 
@@ -53,6 +51,8 @@ When converting generated audio representations to audio, this process occurs in
 ## 4. Model Implementation
 
 ### 4.1. Architecture
+
+- why am i using a gan ?? & w part ig
 
 This work utilizes a Wasserstein GAN with gradient penalty (WGAN-GP) and additional architectural modifications. The generator passes 128 latent dimensions into six transpose convolution blocks blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation, creating a 256 by 256 representation of audio with values between -1 to 1.
 
@@ -80,7 +80,7 @@ On the other hand, when generating instrument one shots (a more complex dataset 
 
 Additionally, the kick drum generation models result in audio where even though the generated image representations appear to contain ample variation, the audio itself usually sounds tonally similar with different decay patterns. The cause for this can again be traced back to the fourier transform based audio representation, which represent all frequencies in equal frequency bin subdivisions, meaning each data point represents all low end information as one bin and therefore one frequency, regardless of variations in fundamental frequencies in training examples. The inverse STFT function, despite heavy optimization in this work, likely still perpetuates audio loss in the recreation of audio signals from magnitude information.
 
-These findings suggest that the model is capable of learning and generating different sounds in the same category but this method of audio representation prevents the model from achieving peak performance
+These findings suggest that the model is capable of learning and generating different sounds in the same category but this method of audio representation prevents the model from achieving peak performance.
 
 ## 6. Conclusion
 
