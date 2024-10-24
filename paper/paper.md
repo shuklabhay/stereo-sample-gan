@@ -22,7 +22,7 @@ WaveNet[1] is an autoregressive DNN which utilizes dialated casual convolutions 
 
 ### 2.2 WaveGAN/SpecGAN
 
-WaveGAN[2] presents an addition to WaveNet. It utilizes a Wasserstein GAN and gradient penalty to generate raw audio waveforms from latent vectors. The WGAN approach also allows for more stable training, eliminates the autoregressive component, and allows parallel audio generation. This creates a more flexible and efficient audio generation model. SpecGAN[2], a similar model architecture for generating spectrogram representations of audio that is introduced in the same paper, produces relatively similar results as WaveGAN while training and inference is significantly less computationally expensive. Despite both of these models' advancements, neither of them are capable of nor built for stereo audio generation and high fidelity audio generation at 44,100 KHz.
+WaveGAN[2] presents an addition to WaveNet. It utilizes a Wasserstein GAN and gradient penalty to generate raw audio waveforms from latent vectors. The WGAN approach also allows for more stable training, eliminates the autoregressive component, and allows parallel audio generation. This creates a more flexible and efficient audio generation model. SpecGAN[2], a similar model architecture for generating spectrogram representations of audio that is introduced in the same paper, produces relatively similar results as WaveGAN while training and inference is significantly less computationally expensive. Despite both of these models' advancements, neither of them are capable of nor built for stereo audio generation and high fidelity audio generation at 44,100 KHz. They both also still require multiple days to completely train.
 
 ## 3. Data Manipulation
 
