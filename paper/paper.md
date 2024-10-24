@@ -20,11 +20,9 @@ This work aims to maintain or decrease computational cost while addressing this 
 
 WaveNet[1] is an autoregressive DNN which utilizes dialated casual convolutions to predict each audio sample based on the existing sequence. Despite its impressive generation capabilites, its effectiveness is limited by its autoregressive nature and data representation. By directly utilizing the waveform of the audio, this work is able to capture fine details of the signal and avoid lossy reconstruction, but these benefits come at the cost of efficiency. The WaveNet architecture is compatible of high fidelity audio generation at a 44.1 KHz sample rate, but the standard WaveNet architecture does not utilize this due to constraints at the time. Subsequent work has also explored stereo audio generation with WaveNet based architectures, but StereoSampleGAN directly addresses stereo audio generation at the model's core.
 
-### 2.2 SpecGAN/WaveGAN
+### 2.2 WaveGAN/SpecGAN
 
-WaveGAN and SpecGAN[2]
-
-- no 44.1khz no stereo
+WaveGAN[2] presents an addition to WaveNet. It utilizes a Wasserstein GAN and gradient penalty to generate raw audio waveforms from latent vectors. The WGAN approach also allows for more stable training, eliminates the autoregressive component, and allows parallel audio generation. This creates a more flexible and efficient audio generation model. SpecGAN[2], a similar model architecture for generating spectrogram representations of audio that is introduced in the same paper, produces relatively similar results as WaveGAN while training and inference is significantly less computationally expensive. Despite both of these models' advancements, neither of them are capable of nor built for stereo audio generation and high fidelity audio generation at 44,100 KHz.
 
 ## 3. Data Manipulation
 
@@ -54,7 +52,7 @@ When converting generated audio representations to audio, this process occurs in
 
 - why am i using a gan ?? & w part ig
 
-This work utilizes a Wasserstein GAN with gradient penalty (WGAN-GP) and additional architectural modifications. The generator passes 128 latent dimensions into six transpose convolution blocks blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation, creating a 256 by 256 representation of audio with values between -1 to 1.
+This work utilizes a Wasserstein GAN and gradient penalty (WGAN-GP) based model architecutre. The generator passes 128 latent dimensions into six transpose convolution blocks blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation, creating a 256 by 256 representation of audio with values between -1 to 1.
 
 The Critic consists of six convolution blocks, converting a 256 by 256 representation of audio to a single value, an approximation of the wasterstien distance. The critic utilizes seven 2D convolution blocks with spectral normalization with to stabilize training, batch normalization, a Leaky ReLU activation, and a dropout layer, except for the first layer which does not utilize batch normalization and the third layer which includes a Linear Attention mechanism to assist the model in understanding contextual relationships in feature maps and prevenent the checkerboard issue audio generation is often plagued with. After these operations, a final 2D convolution with spectral normalization is applied and the result is flattened, returning single value wasserstein distance approximations.
 
