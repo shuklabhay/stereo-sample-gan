@@ -45,7 +45,12 @@ def generate_audio(generation_model_save, len_audio_in, save_images=False):
         if params.visualize_generated is True:
             vis_signal_after_istft = audio_to_norm_db(audio_info)
             graph_spectrogram(
+                current_sample,
+                f"{params.generated_audio_name}_{i + 1}_before_istft",
+                save_images,
+            )
+            graph_spectrogram(
                 vis_signal_after_istft,
-                f"{params.generated_audio_name}_{i + 1}",
+                f"{params.generated_audio_name}_{i + 1}_after_istft",
                 save_images,
             )

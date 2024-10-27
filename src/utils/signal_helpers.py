@@ -72,7 +72,7 @@ def norm_db_to_audio(loudness_info, len_audio_in):
     stereo_audio = []
     for i in range(N_CHANNELS):
         data = scale_data_to_range(loudness_info[i], -40, 40)  # scale to db
-        power_spec = librosa.db_to_power(data)
+        power_spec = librosa.db_to_power(data) + 1e-10
         linear_spec = mel_spec_to_linear_spec(power_spec)
         istft = fast_griffin_lim_istft(linear_spec, len_audio_in)
         stereo_audio.append(istft)
@@ -81,6 +81,7 @@ def norm_db_to_audio(loudness_info, len_audio_in):
 
 
 def mel_spec_to_linear_spec(mel_spectrogram):
+    # Initialize filterbank
     mel_basis = librosa.filters.mel(
         sr=GLOBAL_SR,
         n_fft=GLOBAL_WIN,
@@ -91,33 +92,54 @@ def mel_spec_to_linear_spec(mel_spectrogram):
         norm="slaney",
     )
 
-    # Reconstruct linear spec
-    weights = np.linspace(1.0, 2.0, mel_spectrogram.shape[1])
-    mel_spectrogram_weighted = mel_spectrogram * weights
-    linear_spectrogram, residuals, rank, s = np.linalg.lstsq(
-        mel_basis * weights[:, np.newaxis], mel_spectrogram_weighted.T, rcond=None
-    )
+    # Convert to linear spec
+    mel_basis_reg = mel_basis @ mel_basis.T + 1e-4 * np.eye(mel_basis.shape[0])
+    inv_mel_basis_reg = np.linalg.inv(mel_basis_reg)
+    mel_pseudo = mel_basis.T @ inv_mel_basis_reg
+    linear_spectrogram = mel_pseudo @ mel_spectrogram.T
 
-    # Get amplitudes
-    linear_spectrogram = np.maximum(linear_spectrogram, 0)
-    linear_amplitude_spectrogram = np.sqrt(linear_spectrogram)
+    # Calc params for frequency-dependent smoothing
+    freqs = librosa.fft_frequencies(sr=GLOBAL_SR, n_fft=GLOBAL_WIN)[:LINEARSPEC_FBINS]
+    smoothing_windows = []
+    for freq in freqs:
+        # Wider windows for problematic frequency ranges
+        window_size = 9 if 800 <= freq <= 1200 else 5
+        window = np.hanning(window_size)
+        smoothing_windows.append(window / window.sum())
+
+    # Apply smoothing on frequency-dependent windows
+    linear_spectrogram_smooth = np.zeros_like(linear_spectrogram)
+    for i in range(linear_spectrogram.shape[0]):
+        window = smoothing_windows[i]
+        pad_size = len(window) // 2
+        padded = np.pad(linear_spectrogram[i], pad_size, mode="edge")
+        linear_spectrogram_smooth[i] = np.convolve(padded, window, mode="valid")
+
+    # Frequency-dependent scaling
+    scaling_factors = np.ones(len(freqs))
+    transition_region = (freqs >= 800) & (freqs <= 1200)
+    scaling_factors[transition_region] = 0.7
+    linear_spectrogram_smooth *= scaling_factors[:, np.newaxis]
+
+    # Get amplitude
+    linear_spectrogram_smooth = np.maximum(linear_spectrogram_smooth, 1e-10)
+    linear_amplitude_spectrogram = np.sqrt(linear_spectrogram_smooth)
 
     return linear_amplitude_spectrogram.T
 
 
 def fast_griffin_lim_istft(channel_magnitudes, len_audio_in):
-    # Reconstruction constants
     iterations = 16
-    momentum = 0.99
+    momentum = 0.95
     target_length = int(len_audio_in * GLOBAL_SR)
     hop = target_length // FRAMES
 
-    # Noise reduction constants
+    # Noise reduction
     noise_thresh = 0.05
     noise_memory = np.zeros_like(channel_magnitudes)
     noise_dec_factor = 0.1
 
-    # Intialize angle estimates from existing audio
+    # Initialize angle from existing magnitudes
     initial_complex = channel_magnitudes.astype(np.complex64)
     y_init = librosa.istft(
         initial_complex.T,
@@ -150,11 +172,9 @@ def fast_griffin_lim_istft(channel_magnitudes, len_audio_in):
         )
         mask = (gated_magnitudes < noise_thresh) | (gated_magnitudes < noise_memory)
         gated_magnitudes[mask] = gated_magnitudes.min()
-
-        # Use gated magnitudes for reconstruction
         stft = gated_magnitudes * np.exp(1j * angles_update)
 
-        # Back pass
+        # Forward and back pass
         y = librosa.istft(
             stft.T,
             hop_length=hop,
@@ -164,7 +184,6 @@ def fast_griffin_lim_istft(channel_magnitudes, len_audio_in):
             length=target_length,
         )
 
-        # Forward pass
         stft_full = librosa.stft(
             y,
             n_fft=GLOBAL_WIN,
@@ -174,7 +193,6 @@ def fast_griffin_lim_istft(channel_magnitudes, len_audio_in):
             center=True,
         )
 
-        # Trim size & copy found angles
         stft_trim = stft_full.T[:FRAMES, :LINEARSPEC_FBINS]
         angles = np.angle(stft_trim)
 
@@ -188,7 +206,7 @@ def fast_griffin_lim_istft(channel_magnitudes, len_audio_in):
         length=target_length,
     )
 
-    # Short fade in/out (reduce spectral splatter)
+    # Slightly fade start and end
     fade_length = 128  # samples
     fade_in = np.linspace(0, 1, fade_length)
     fade_out = np.linspace(1, 0, fade_length)

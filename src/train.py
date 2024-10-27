@@ -24,7 +24,7 @@ CRITIC_STEPS = 5
 # Loss metrics
 def compute_g_loss(critic, fake_validity, fake_audio_data, real_audio_data):
     wasserstein_dist = -torch.mean(fake_validity)
-    feat_match = 0.35 * calculate_feature_match_diff(
+    feat_match = 0.45 * calculate_feature_match_diff(
         critic, real_audio_data, fake_audio_data
     )
 
