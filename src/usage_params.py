@@ -4,13 +4,13 @@ class UsageParams:
         self.audio_generation_count = 2  # Audio examples to generate
 
         # Training params
-        self.training_sample_length = 1.5  # seconds
+        self.training_sample_length = 0.6  # seconds
         self.outputs_dir = "outputs"  # Where to save your generated audio & model
 
         self.model_save_name = (
-            "StereoSampleGAN-InstrumentOneShot"  # What to name your model save
+            "StereoSampleGAN-CuratedKick"  # What to name your model save
         )
-        self.training_audio_dir = "data/one_shots"  # Your training data path
+        self.training_audio_dir = "data/kick_samples_curated"  # Your training data path
         self.compiled_data_path = (
             "data/compiled_data.npy"  # Your compiled data/output path
         )
