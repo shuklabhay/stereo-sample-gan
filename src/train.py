@@ -45,7 +45,7 @@ def compute_c_loss(
     training,
     device,
 ):
-    wasserstein_dist = compute_wasserstein_diff(real_validity, fake_validity)
+    wasserstein_dist = calculate_wasserstein_diff(real_validity, fake_validity)
     spectral_diff = 0.15 * calculate_spectral_diff(real_audio_data, fake_audio_data)
     spectral_convergence = 0.15 * calculate_spectral_convergence_diff(
         real_audio_data, fake_audio_data
@@ -68,11 +68,12 @@ def compute_c_loss(
 
 
 # Loss Metrics
-def compute_wasserstein_diff(real_validity, fake_validity):
+def calculate_wasserstein_diff(real_validity, fake_validity):
     return -(torch.mean(real_validity) - torch.mean(fake_validity))
 
 
 def calculate_feature_match_diff(critic, real_audio_data, fake_audio_data):
+    # Calc difference between real and fake features
     real_features = critic.extract_features(real_audio_data)
     fake_features = critic.extract_features(fake_audio_data)
 
@@ -156,7 +157,7 @@ def train_epoch(
         optimizer_C.step()
 
         total_c_loss += c_loss.item()
-        total_w_dist += compute_wasserstein_diff(real_validity, fake_validity).item()
+        total_w_dist += calculate_wasserstein_diff(real_validity, fake_validity).item()
 
         # Train generator every CRITIC_STEPS steps
         if i % CRITIC_STEPS == 0:
@@ -222,7 +223,7 @@ def validate(generator, critic, dataloader, device):
 
             total_g_loss += g_loss.item()
             total_c_loss += c_loss.item()
-            total_w_dist += compute_wasserstein_diff(
+            total_w_dist += calculate_wasserstein_diff(
                 real_validity, fake_validity
             ).item()
 
