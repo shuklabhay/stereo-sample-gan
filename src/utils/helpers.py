@@ -314,7 +314,6 @@ class SignalProcessing:
         self, linear_magnitudes: NDArray[np.float64]
     ) -> NDArray[np.float64]:
         """Reconstruct audio from linear spectrogram."""
-        # Reconstruction parameters
         iterations = 16
         momentum = 0.95
         target_length = int(self.sample_length * self.constants.SR)
@@ -408,6 +407,7 @@ class SignalProcessing:
     def encode_sample_directory(
         self, sample_dir: str, output_dir: str, visualize: bool = True
     ) -> None:
+        """Encode sample directory as mel spectrograms."""
         self.utils.delete_DSStore(sample_dir)
         real_data = []
 
@@ -432,7 +432,7 @@ class SignalProcessing:
         self.utils.save_loudness_data(output_dir, np.array(real_data))
 
     def stft_and_istft(self, sample_path: str, file_name: str) -> None:
-
+        """Perform a STFT and ISTFT operation."""
         # Load data
         y = self.utils.load_audio(sample_path, self.sample_length)
 
