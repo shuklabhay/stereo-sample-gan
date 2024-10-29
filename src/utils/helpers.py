@@ -11,9 +11,6 @@ from torch import nn
 from .constants import SignalConstants, TrainingParams, ModelParams
 
 
-from architecture import Generator
-
-
 class DataUtils:
     def __init__(self):
         self.SR = SignalConstants.SR
@@ -121,6 +118,9 @@ class DataUtils:
 
 class ModelUtils:
     def __init__(self, sample_length: float) -> None:
+        from architecture import Generator
+
+        self.generator = Generator()
         self.constants = TrainingParams()
         self.params = ModelParams()
         self.data_utils = DataUtils()
@@ -134,19 +134,16 @@ class ModelUtils:
         )
         print(f"Model saved at {self.params.model_save_path}")
 
-    @staticmethod
-    def load_model(
-        generator: Generator, model_save_path: str, device: torch.device
-    ) -> None:
+    def load_model(self, model_save_path: str, device: torch.device) -> None:
         """Load model from .pth file."""
-        generator.load_state_dict(
+        self.generator.load_state_dict(
             torch.load(
                 model_save_path,
                 map_location=device,
                 weights_only=False,
             )
         )
-        generator.eval()
+        self.generator.eval()
 
     @staticmethod
     def get_device() -> torch.device:
@@ -159,13 +156,12 @@ class ModelUtils:
         """Generate audio with saved model."""
         device = self.get_device()
 
-        generator = Generator()
-        self.load_model(generator, model_save_path, device)
+        self.load_model(model_save_path, device)
 
         # Generate audio
         z = torch.randn(generation_count, ModelParams.LATENT_DIM, 1, 1)
         with torch.no_grad():
-            generated_output = generator(z).squeeze().numpy()
+            generated_output = self.generator(z).squeeze().numpy()
 
         print("Generated output shape:", generated_output.shape)
 
