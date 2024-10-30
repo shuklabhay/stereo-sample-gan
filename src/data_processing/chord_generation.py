@@ -27,11 +27,6 @@ class WaveformGenerator:
         """Generate triangle waveform."""
         return 2 * np.abs(2 * (freq * t - np.floor(0.5 + freq * t))) - 1
 
-    @staticmethod
-    def pulse(t: np.ndarray, freq: float, duty: float = 0.5) -> np.ndarray:
-        """Generate pulse waveform."""
-        return np.where((freq * t - np.floor(freq * t)) < duty, 1.0, -1.0)
-
 
 class ChordGenerator:
     def __init__(self, sample_rate: int = 44100, duration: float = 1.5):
@@ -44,39 +39,26 @@ class ChordGenerator:
             "square": WaveformGenerator.square,
             "sawtooth": WaveformGenerator.sawtooth,
             "triangle": WaveformGenerator.triangle,
-            "pulse": WaveformGenerator.pulse,
         }
 
-        # Chord and interval ratios
+        # Chord ratios
         self.chord_types: Dict[str, List[float]] = {
-            "minor": [1, 1.2, 1.5],
-            "major": [1, 1.25, 1.5],
-            "diminished": [1, 1.189, 1.414],
-            "augmented": [1, 1.25, 1.587],
-            "minor7": [1, 1.2, 1.5, 1.782],
-            "major7": [1, 1.25, 1.5, 1.87],
-            "dom7": [1, 1.25, 1.5, 1.782],
-            "sus2": [1, 1.122, 1.5],
-            "sus4": [1, 1.335, 1.5],
-            "minor9": [1, 1.2, 1.5, 1.782, 2.25],
-            "major9": [1, 1.25, 1.5, 1.87, 2.25],
-            "min7b5": [1, 1.189, 1.414, 1.782],
-            "aug7": [1, 1.25, 1.587, 1.782],
-            "7sus4": [1, 1.335, 1.5, 1.782],
-            "dim7": [1, 1.189, 1.414, 1.682],
-            "min11": [1, 1.2, 1.5, 1.782, 2.25, 2.669],
-            "maj13": [1, 1.25, 1.5, 1.87, 2.25, 2.833, 3.375],
+            "minor": [1, 1.2, 1.5],  # Minor triad
+            "major": [1, 1.25, 1.5],  # Major triad
+            "diminished": [1, 1.189, 1.414],  # Diminished triad
+            "augmented": [1, 1.25, 1.587],  # Augmented triad
+            "minor7": [1, 1.2, 1.5, 1.782],  # Minor seventh
+            "major7": [1, 1.25, 1.5, 1.87],  # Major seventh
+            "dom7": [1, 1.25, 1.5, 1.782],  # Dominant seventh
+            "sus2": [1, 1.122, 1.5],  # Suspended second
+            "sus4": [1, 1.335, 1.5],  # Suspended fourth
         }
 
         # Note voicings
         self.voicings: Dict[str, Callable] = {
-            "normal": lambda n: np.ones(n),
-            "root_heavy": lambda n: np.linspace(1.2, 0.8, n),
-            "top_heavy": lambda n: np.linspace(0.8, 1.2, n),
-            "alternating": lambda n: np.array(
-                [1.2 if i % 2 == 0 else 0.8 for i in range(n)]
-            ),
-            "middle_heavy": lambda n: 1 - 0.3 * np.abs(np.linspace(-1, 1, n)),
+            "normal": lambda n: np.ones(n),  # Equal volume for all notes
+            "root_heavy": lambda n: np.linspace(1.2, 0.8, n),  # Emphasize root note
+            "top_heavy": lambda n: np.linspace(0.8, 1.2, n),  # Emphasize highest note
         }
 
         # Noise types
@@ -88,19 +70,43 @@ class ChordGenerator:
         }
 
     def generate_adsr_envelope(
-        self, size: int, attack: float, decay: float, sustain: float, release: float
+        self,
+        size: int,
+        attack: float,
+        decay: float,
+        sustain: float,
+        release: float,
+        start_offset: float = 0.0,
+        end_offset: float = 0.0,
     ) -> np.ndarray:
-        """Generate ADSR envelope with given parameters."""
+        """Generate ADSR envelope with given parameters and timing offsets."""
         t = np.linspace(0, 1, size)
 
-        attack_idx = int(attack * size)
-        decay_idx = int((attack + decay) * size)
-        release_idx = int((1 - release) * size)
+        # Calculate timing with offsets
+        effective_start = max(0.0, start_offset)
+        effective_end = min(1.0, 1.0 - end_offset)
+
+        # Adjust envelope timings
+        attack_idx = int(
+            (effective_start + attack * (effective_end - effective_start)) * size
+        )
+        decay_idx = int(
+            (effective_start + (attack + decay) * (effective_end - effective_start))
+            * size
+        )
+        release_idx = int(effective_end * size)
 
         envelope = np.zeros_like(t)
 
-        if attack_idx > 0:
-            envelope[:attack_idx] = np.linspace(0, 1, attack_idx)
+        # Apply start offset
+        if effective_start > 0:
+            envelope[: int(effective_start * size)] = 0
+
+        # Generate envelope segments
+        if attack_idx > int(effective_start * size):
+            envelope[int(effective_start * size) : attack_idx] = np.linspace(
+                0, 1, attack_idx - int(effective_start * size)
+            )
 
         if decay_idx > attack_idx:
             envelope[attack_idx:decay_idx] = np.linspace(
@@ -109,8 +115,10 @@ class ChordGenerator:
 
         envelope[decay_idx:release_idx] = sustain
 
+        # Apply release
         if release_idx < size:
-            envelope[release_idx:] = np.linspace(sustain, 0, size - release_idx)
+            release_samples = size - release_idx
+            envelope[release_idx:] = np.linspace(sustain, 0, release_samples)
 
         return envelope
 
@@ -120,8 +128,10 @@ class ChordGenerator:
         waveform: str = "sine",
         adsr_params: Optional[Dict] = None,
         amplitude: float = 0.5,
+        start_offset: float = 0.0,
+        end_offset: float = 0.0,
     ) -> np.ndarray:
-        """Generate a frequency tone with waveform and ADSR envelope."""
+        """Generate a frequency tone with waveform, ADSR envelope, and timing variations."""
         t = np.linspace(0, self.duration, int(self.sample_rate * self.duration), False)
 
         # Generate the basic waveform
@@ -131,7 +141,7 @@ class ChordGenerator:
         else:
             wave = self.waveforms[waveform](t, frequency)
 
-        # Apply ADSR envelope
+        # Apply ADSR envelope with timing variations
         if adsr_params is None:
             adsr_params = {
                 "attack": random.uniform(0.05, 0.2),
@@ -146,6 +156,8 @@ class ChordGenerator:
             adsr_params["decay"],
             adsr_params["sustain"],
             adsr_params["release"],
+            start_offset,
+            end_offset,
         )
 
         return amplitude * wave * envelope
@@ -173,8 +185,9 @@ class ChordGenerator:
         waveform: str = "sine",
         noise_type: str = "white",
         noise_level: float = 0.02,
+        timing_variation: float = 0.02,
     ) -> np.ndarray:
-        """Generate a chord with specified parameters and random ADSR."""
+        """Generate a chord with specified parameters, random ADSR, and timing variations."""
         intervals = self.chord_types[chord_type]
         weights = self.voicings[voicing](len(intervals))
 
@@ -186,14 +199,22 @@ class ChordGenerator:
             "release": random.uniform(0.1, 0.3),
         }
 
-        # Generate base tones
-        chord = np.sum(
-            [
-                w * self.generate_tone(root_freq * interval, waveform, adsr_params)
-                for w, interval in zip(weights, intervals)
-            ],
-            axis=0,
-        )
+        # Generate tones
+        chord = np.zeros(int(self.sample_rate * self.duration))
+
+        for w, interval in zip(weights, intervals):
+            # Generate random timing offsets for each note
+            start_offset = random.uniform(0, timing_variation)
+            end_offset = random.uniform(0, timing_variation)
+
+            note = w * self.generate_tone(
+                root_freq * interval,
+                waveform,
+                adsr_params,
+                start_offset=start_offset,
+                end_offset=end_offset,
+            )
+            chord += note
 
         # Add noise
         if noise_type != "none":
@@ -209,15 +230,16 @@ class ChordGenerator:
 
 
 def generate_dataset(output_dir: str = "data/chordshot_samples", n_samples: int = 2):
-    """Generate a large dataset of chord samples with metadata."""
+    """Generate a large dataset of chord samples."""
     generator = ChordGenerator()
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     # Parameters for variation
-    base_freqs = np.logspace(np.log10(65.41), np.log10(523.25), 25)  # C2 to C5
+    base_freqs = np.logspace(np.log10(130.81), np.log10(523.25), 25)  # C2 to C5
     noise_levels = [0.01, 0.02, 0.03]
+    timing_variations = [0.01, 0.02, 0.03]
 
     # Create parameter combinations
     generated_sample_count = 0
@@ -229,6 +251,7 @@ def generate_dataset(output_dir: str = "data/chordshot_samples", n_samples: int 
             generator.waveforms.keys(),
             generator.noise_types.keys(),
             noise_levels,
+            timing_variations,
         )
     )
     random.shuffle(param_combinations)
@@ -241,6 +264,7 @@ def generate_dataset(output_dir: str = "data/chordshot_samples", n_samples: int 
         waveform,
         noise_type,
         noise_level,
+        timing_variation,
     ) in param_combinations:
         if generated_sample_count >= n_samples:
             break
@@ -254,10 +278,11 @@ def generate_dataset(output_dir: str = "data/chordshot_samples", n_samples: int 
                 waveform=str(waveform),
                 noise_type=str(noise_type),
                 noise_level=float(noise_level),
+                timing_variation=float(timing_variation),
             )
 
             # Create filename and save
-            filename = f"chord_{generated_sample_count:04d}.wav"
+            filename = f"chord_{(generated_sample_count + 1):04d}.wav"
             filepath = os.path.join(output_dir, filename)
             wavfile.write(
                 filepath, generator.sample_rate, (chord * 32767).astype(np.int16)

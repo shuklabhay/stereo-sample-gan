@@ -10,10 +10,11 @@ from scipy.signal.windows import hann
 
 class ModelType(Enum):
     KICKDRUM = "Kickdrum"
-    CHORD_SHOT = "ChordShot"
+    CHORDSHOT = "ChordShot"
 
 
-selected_model = ModelType.CHORD_SHOT.value
+model_selection = ModelType.KICKDRUM
+selected_model = model_selection.value
 
 
 @dataclass
@@ -62,7 +63,7 @@ class TrainingParams:
     LR_DECAY = 0.9
     LAMBDA_GP = 5
     CRITIC_STEPS = 5
-    N_EPOCHS = 14
+    N_EPOCHS = 20
 
     @property
     def SHOW_GENERATED_INTERVAL(self) -> int:

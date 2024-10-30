@@ -316,7 +316,7 @@ class SignalProcessing:
         hop = target_length // self.constants.FRAMES
 
         # Noise reduction
-        noise_thresh = 0.05
+        noise_thresh = 0.08
         noise_memory = np.zeros_like(linear_magnitudes)
         noise_dec_factor = 0.1
 

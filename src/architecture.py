@@ -7,6 +7,83 @@ from utils.helpers import ModelParams, SignalConstants
 
 
 # Model Components
+class ResizeConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, scale_factor=2, final_block=False):
+        super(ResizeConvBlock, self).__init__()
+
+        layers = [
+            nn.Upsample(scale_factor=scale_factor, mode="nearest"),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+        ]
+
+        if not final_block:
+            layers.extend(
+                [
+                    nn.BatchNorm2d(out_channels),
+                    nn.LeakyReLU(0.2),
+                    nn.Dropout(ModelParams.DROPOUT_RATE),
+                ]
+            )
+        else:
+            layers.append(nn.Tanh())
+
+        self.block = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.block(x)
+
+
+class Generator(nn.Module):
+    def __init__(self):
+        super(Generator, self).__init__()
+        # Preconvolution 1x1 -> 4x4
+        self.preconv_size = 4
+        self.preconv_channels = ModelParams.LATENT_DIM
+        self.initial_features = (
+            self.preconv_channels * self.preconv_size * self.preconv_size
+        )
+
+        self.initial = nn.Sequential(
+            nn.Linear(ModelParams.LATENT_DIM, self.initial_features),
+            nn.BatchNorm1d(self.initial_features),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(ModelParams.DROPOUT_RATE),
+        )
+
+        # Resize convolution blocks
+        self.resize_blocks = nn.Sequential(
+            ResizeConvBlock(self.preconv_channels, 64),  # 4x4 -> 8x8
+            ResizeConvBlock(64, 32),  # 8x8 -> 16x16
+            ResizeConvBlock(32, 16),  # 16x16 -> 32x32
+            ResizeConvBlock(16, 8),  # 32x32 -> 64x64
+            ResizeConvBlock(8, 8),  # 64x64 -> 128x128
+            ResizeConvBlock(
+                8, SignalConstants.CHANNELS, scale_factor=2, final_block=True
+            ),  # 128x128 -> 256x256
+        )
+
+    def forward(self, z):
+        batch_size = z.size(0)
+
+        # Reshape input: Ensure z is properly flattened
+        x = z.view(batch_size, -1)
+
+        # Pass through initial dense layer
+        x = self.initial(x)
+
+        # Reshape for convolution
+        x = x.view(
+            batch_size,
+            self.preconv_channels,
+            self.preconv_size,
+            self.preconv_size,
+        )
+
+        # Pass through resize blocks
+        x = self.resize_blocks(x)
+        return x
+
+
 class LinearAttention(nn.Module):
     def __init__(self, in_channels):
         super(LinearAttention, self).__init__()
@@ -36,46 +113,11 @@ class LinearAttention(nn.Module):
         return out
 
 
-class Generator(nn.Module):
-    def __init__(self):
-        super(Generator, self).__init__()
-        self.deconv_blocks = nn.Sequential(
-            nn.ConvTranspose2d(
-                ModelParams.LATENT_DIM, 128, kernel_size=4, stride=1, padding=0
-            ),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 128, 4, 4)
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 64, 8, 8)
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(32),
-            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 32, 16, 16)
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(16),
-            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 16, 32, 32)
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            nn.ConvTranspose2d(16, 8, kernel_size=6, stride=4, padding=1),
-            nn.BatchNorm2d(8),
-            nn.LeakyReLU(0.2),  # Shape: (BATCH_SIZE, 8, 128, 128)
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            nn.ConvTranspose2d(
-                8, SignalConstants.CHANNELS, kernel_size=6, stride=2, padding=2
-            ),
-            nn.Tanh(),  # Shape: (BATCH_SIZE, N_CHANNELS, 256, 256)
-        )
-
-    def forward(self, z):
-        x = self.deconv_blocks(z)
-        return x
-
-
 class Critic(nn.Module):
     def __init__(self):
         super(Critic, self).__init__()
+
+        # Convolution blocks
         self.conv_blocks = nn.Sequential(
             spectral_norm(
                 nn.Conv2d(
@@ -122,5 +164,6 @@ class Critic(nn.Module):
         return features
 
     def forward(self, x):
+        # Convulve
         x = self.conv_blocks(x)
         return x
