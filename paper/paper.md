@@ -10,19 +10,19 @@ Existing convolutional aproaches, like WaveNet, while capable of audio generatio
 
 ## 1. Introduction
 
-Audio generation by nature is an infinitely more complex problem than image generation due to a few key reasons. Audio often requires high sample rates, meaning data often requires more power to process; the human ear is naturally more sensitive to audio, meaning artifacts can destroy the perceptual quality of audio; and high-quality datasets are sparse. These issues are often addressed by reducing the sample rate of training data and limiting the model to single channel audio, efficiently generating audio but losing audio quality.
+Audio generation by nature is an infinitely more complex problem than image generation due to a few key reasons. Audio often requires high sample rates, meaning data often requires more power to process; the human ear is naturally more sensitive to audio, meaning artifacts can destroy the perceptual quality of audio; and high-quality datasets are sparse, making training models a challenge. The bulk of issues are often addressed by reducing the sample rate of training data and limiting the model to single channel audio, effectively creating some audio but at the cost of quality.
 
-This work aims to maintain or decrease computational cost while addressing this audio quality tradeoff, namely creating a robust framework for stereo audio generation. This work also addresses the checkerboard artifact issue[3] found in this application of transposed convolutions. To achieve these results, we will utilize a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), linear attention mechanisms, and custom loss metrics to train over three datasets on a single Apple M1 CPU and produce distinct stereo audio with a substantial reduction in training time and parameter count.
+This work aims to maintain or decrease computational cost while addressing this audio quality tradeoff, namely creating a robust framework for stereo audio generation. To achieve these results, we will utilize a Deep Convolutional Wasserstein GAN with Gradient Penalty (WGAN-GP), linear attention mechanisms, and custom loss metrics to train over three datasets on a single Apple M1 CPU to produce distinct stereo audio at 44.1 KHz.
 
 ## 2. Related Works
 
 ### 2.1 WaveNet
 
-WaveNet[1] is an autoregressive DNN which utilizes dialated casual convolutions to predict each audio sample based on the existing sequence. Despite its impressive generation capabilites, its effectiveness is limited by its autoregressive nature and data representation. By directly utilizing the waveform of the audio, this work is able to capture fine details of the signal and avoid lossy reconstruction, but these benefits come at the cost of efficiency. The WaveNet architecture is compatible of high fidelity audio generation at a 44.1 KHz sample rate, but the standard WaveNet architecture does not utilize this due to constraints at the time. Subsequent work has also explored stereo audio generation with WaveNet based architectures, but StereoSampleGAN directly addresses stereo audio generation at the model's core.
+WaveNet[1] is an autoregressive DNN which utilizes dialated casual convolutions to predict each audio sample based on the existing sequence. Despite its impressive generation capabilites, its effectiveness is limited by its autoregressive nature and data representation. By directly utilizing the waveform of the audio, this work is able to capture fine details of the signal and avoid lossy reconstruction, but these benefits come at the cost of efficiency, as waveform data is over substantially high dimensionality. The autoregressive nature of WaveNet also displays avenues of efficiency improvements. Subsequent works have made improvements on this WaveNet framework: Autoregression is addressed in Parallel WaveNet[2], some WaveNet based architectures are compatible with 44.1 KHz audio generation, and some subsequent has also explored stereo audio generation with WaveNet based architectures, but StereoSampleGAN directly addresses all of these issues – especially stereo audio generation – at the model's core, creating a solution tailored to these approaches instead of optimizing existing models.
 
 ### 2.2 WaveGAN/SpecGAN
 
-WaveGAN[2] presents an addition to WaveNet. It utilizes a Wasserstein GAN and gradient penalty to generate raw audio waveforms from latent vectors. The WGAN approach also allows for more stable training, eliminates the autoregressive component, and allows parallel audio generation. This creates a more flexible and efficient audio generation model. SpecGAN[2], a similar model architecture for generating spectrogram representations of audio that is introduced in the same paper, produces relatively similar results as WaveGAN while training and inference is significantly less computationally expensive. Despite both of these models' advancements, neither of them are capable of nor built for stereo audio generation and high fidelity audio generation at 44,100 KHz. They both also still require multiple days to completely train.
+WaveGAN[3] is a significant WaveNet based architecture. It utilizes a Wasserstein GAN and gradient penalty to generate raw audio waveforms from latent vectors. The WGAN approach also allows for more stable training, eliminating the autoregressive component. The GAN approach at the time was an entirely novel approach to audio generation and displayed numerous improvements compared to WaveNet. This work also introduced SpecGAN, a similar model architecture for generating spectrogram representations of audio with relatively similar audio results and a reduction in computational cost. Despite both of these models both being massove advancements, neither of them are capable of nor built for stereo audio generation and high fidelity audio generation at 44.1 KHz and both still require multiple days to train. They also focus on general audio generation, whereas this work is potentially tailored towards percussive elements.
 
 ## 3. Data Manipulation
 
@@ -30,13 +30,13 @@ WaveGAN[2] presents an addition to WaveNet. It utilizes a Wasserstein GAN and gr
 
 This paper utilizes three distinct data sets engineered to measure the model's resilince to variation in spectral content.
 
-1. Curated Kick Drum Set: Kick drum impulses with primarily short decay profiles.
+1. Kick Drumset: Kick drum impulses with primarily short decay profiles.
 
-2. Diverse Kick Drum Set: Kick drum impulses with greater variation in decay profile and overall harmonic content.
+2. Snare Drumset: Snare drums and percussion shots such as rim shots, claps, wood blocks, etc.
 
-3. Instrument One Shot Set: Single note impulses capturing the tonal qualities and spectral characteristics of varying synthesizer and instrument sounds.
+3. Chord One Shot Set: Single chord impulses with variation in ASDR, chord types, voicings, waveforms, and noise.
 
-These datasets provide robust frameworks for determining the model's response to varying amounts of variation within training data. Most audio is sourced from online "digital audio production sample packs" which compile sounds for a wide variety of generes and use cases.
+These datasets provide robust frameworks for determining the model's response to varying amounts of variation within training data. Most audio is sourced from online "digital audio production sample packs" which compile sounds for a wide variety of generes and use cases. The Chord one shot set is entirely created for this work.
 
 ### 3.2 Feature Engineering
 
@@ -83,6 +83,8 @@ This model architecture provides important contributions to the field of audio g
 ## 7. References
 
 [1] https://arxiv.org/abs/1609.03499
+[2] https://arxiv.org/abs/1711.10433
+
 [2] https://arxiv.org/abs/1802.04208
 [3] https://distill.pub/2016/deconv-checkerboard/
 [4] https://arxiv.org/abs/1912.01219
