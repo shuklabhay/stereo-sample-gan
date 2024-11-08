@@ -1,7 +1,6 @@
 import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,11 +9,11 @@ from scipy.signal.windows import hann
 
 class ModelType(Enum):
     KICKDRUM = "Kickdrum"
+    SNARE = "Snare"
     CHORDSHOT = "ChordShot"
 
 
-model_selection = ModelType.KICKDRUM
-selected_model = model_selection.value
+model_selection = ModelType.SNARE
 
 
 @dataclass
@@ -34,20 +33,19 @@ class ModelParams:
         self.model_save_path: str
         self.training_audio_dir: str
 
-    def load_params(
-        self, model_name: Literal["Kickdrum", "ChordShot"] = selected_model
-    ) -> None:
+    def load_params(self, model_name: ModelType = model_selection) -> None:
         with open("src/utils/model_params.json", "r") as f:
             model_data = json.load(f)
 
+        desired_model = model_name.value
         selected_model = None
         for model in model_data:
-            if model["model_name"] == model_name:
+            if model["model_name"] == desired_model:
                 selected_model = model
                 break
 
         if selected_model is None:
-            raise ValueError(f"Model '{model_name}' not found in model_params.json")
+            raise ValueError(f"Model '{desired_model}' not found in model_params.json")
 
         # Set params from JSON
         self.selected_model = selected_model["model_name"]

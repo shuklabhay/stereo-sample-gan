@@ -10,7 +10,7 @@ from utils.helpers import ModelParams, ModelUtils
 params = ModelParams()
 utils = ModelUtils(params.sample_length)
 
-params.load_params(ModelType.CHORDSHOT)
+params.load_params(ModelType.SNARE)
 count_to_generate = 2
 
 utils.generate_audio(params.model_save_path, count_to_generate, True)
