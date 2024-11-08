@@ -30,11 +30,11 @@ WaveGAN[3] is a significant WaveNet based architecture. It utilizes a Wasserstei
 
 This paper utilizes three distinct data sets engineered to measure the model's resilince to variation in spectral content.
 
-1. Kick Drumset: Kick drum impulses with primarily short decay profiles.
+1. Kick Drumset (4360 Samples, 0.73 hours): Kick drum samples mostly filtered by personal preference for "high quality" samples.
 
-2. Snare Drumset: Snare drums and percussion shots such as rim shots, claps, wood blocks, etc.
+2. Snare Drumset (5072 Samples, 0.85 hours): Snare drums and percussion shots such as rim shots, claps, wood blocks, etc. mostly filtered by personal preference for "high quality" samples.
 
-3. Chord One Shot Set: Single chord impulses with variation in ASDR, chord types, voicings, waveforms, and noise.
+3. Chord One Shot Set (4000 Samples, 1.67 hours): Generated single chord impulses with variation in ASDR, chord types, voicings, waveforms, and noise.
 
 These datasets provide robust frameworks for determining the model's response to varying amounts of variation within training data. Most audio is sourced from online "digital audio production sample packs" which compile sounds for a wide variety of generes and use cases. The Chord one shot set is entirely created for this work.
 
