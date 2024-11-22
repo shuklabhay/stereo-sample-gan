@@ -30,4 +30,4 @@ sample_path, sample_name = choose_random_sample()
 
 if sample_path is not None:
     print(sample_path)
-    signal_processing.stft_and_istft(sample_path, "test")
+    signal_processing.stft_and_istft(sample_path, "test", True)

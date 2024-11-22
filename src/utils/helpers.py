@@ -6,6 +6,7 @@ import plotly.subplots as sp
 import soundfile as sf
 import torch
 from numpy.typing import NDArray
+import torch
 from torch import nn
 
 from .constants import SignalConstants, TrainingParams, ModelParams
@@ -427,7 +428,9 @@ class SignalProcessing:
 
         self.utils.save_loudness_data(output_dir, np.array(real_data))
 
-    def stft_and_istft(self, sample_path: str, file_name: str) -> None:
+    def stft_and_istft(
+        self, sample_path: str, file_name: str, visualize: bool = False
+    ) -> None:
         """Perform a STFT and ISTFT operation."""
         # Load data
         y = self.utils.load_audio(sample_path, self.sample_length)
@@ -452,5 +455,6 @@ class SignalProcessing:
         save_path = os.path.join(self.params.outputs_dir, f"{file_name}.wav")
         self.utils.save_audio(save_path, istft)
 
-        self.utils.graph_spectrogram(stft, "stft")
-        self.utils.graph_spectrogram(vis_istft, "post istft")
+        if visualize is True:
+            self.utils.graph_spectrogram(stft, "stft")
+            self.utils.graph_spectrogram(vis_istft, "post istft")
