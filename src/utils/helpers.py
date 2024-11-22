@@ -13,10 +13,6 @@ from .constants import SignalConstants, TrainingParams, ModelParams
 
 
 class DataUtils:
-    def __init__(self):
-        self.SR = SignalConstants.SR
-        self.CHANNELS = SignalConstants.CHANNELS
-
     @staticmethod
     def save_loudness_data(
         file_path: str, loudness_information: NDArray[np.float64]
@@ -29,17 +25,21 @@ class DataUtils:
         """Load normalized loudness data array."""
         return np.load(file_path, allow_pickle=True)
 
-    def load_audio(self, audio_path: str, sample_length: float) -> NDArray[np.float64]:
+    @staticmethod
+    def load_audio(audio_path: str, sample_length: float) -> NDArray[np.float64]:
         """Load raw audio as array."""
-        y, sr = librosa.load(audio_path, sr=self.SR, mono=False)
+        y, sr = librosa.load(audio_path, sr=SignalConstants.SR, mono=False)
         if y.ndim == 1:
             y = np.stack((y, y), axis=0)
-        y = librosa.util.fix_length(y, size=int(sample_length * self.SR), axis=1)
+        y = librosa.util.fix_length(
+            y, size=int(sample_length * SignalConstants.SR), axis=1
+        )
         return y
 
-    def save_audio(self, audio_path: str, audio: NDArray[np.float64]) -> None:
+    @staticmethod
+    def save_audio(audio_path: str, audio: NDArray[np.float64]) -> None:
         """Save raw audio as audio."""
-        sf.write(audio_path, audio.T, self.SR)
+        sf.write(audio_path, audio.T, SignalConstants.SR)
 
     @staticmethod
     def scale_data_to_range(
@@ -99,22 +99,23 @@ class DataUtils:
         else:
             fig.write_image(f"outputs/spectrogram_images/{sample_name}.png")
 
+    @staticmethod
     def generate_sine_impulses(
-        self, sample_length: float, num_impulses: int = 1, outPath: str = "model"
+        sample_length: float, num_impulses: int = 1, outPath: str = "model"
     ) -> None:
         amplitude = 1
         for i in range(num_impulses):
-            t = np.arange(0, sample_length, 1 / self.SR)
+            t = np.arange(0, sample_length, 1 / SignalConstants.SR)
             freq = np.random.uniform(0, 20000)
             audio_wave = amplitude * np.sin(2 * np.pi * freq * t)
-            sample_count = int(sample_length * self.SR)
+            sample_count = int(sample_length * SignalConstants.SR)
             audio_signal = np.zeros(sample_count)
 
             audio_wave = audio_wave[:sample_count]
             audio_signal[:] = audio_wave
 
             save_path = os.path.join(outPath, f"{freq:.2f}.wav")
-            self.save_audio(save_path, audio_signal)
+            DataUtils.save_audio(save_path, audio_signal)
 
 
 class ModelUtils:
@@ -124,7 +125,6 @@ class ModelUtils:
         self.generator = Generator()
         self.constants = TrainingParams()
         self.params = ModelParams()
-        self.data_utils = DataUtils()
         self.signal_processing = SignalProcessing(sample_length)
 
     def save_model(self, model: nn.Module) -> None:
@@ -175,18 +175,18 @@ class ModelUtils:
                 f"{self.params.generated_audio_name}_{i + 1}.wav",
             )
 
-            self.data_utils.save_audio(audio_save_path, audio_info)
+            DataUtils.save_audio(audio_save_path, audio_info)
 
             if self.params.visualize_generated:
                 vis_signal_after_istft = self.signal_processing.audio_to_norm_db(
                     audio_info
                 )
-                self.data_utils.graph_spectrogram(
+                DataUtils.graph_spectrogram(
                     current_sample,
                     f"{self.params.generated_audio_name}_{i + 1}_before_istft",
                     save_images,
                 )
-                self.data_utils.graph_spectrogram(
+                DataUtils.graph_spectrogram(
                     vis_signal_after_istft,
                     f"{self.params.generated_audio_name}_{i + 1}_after_istft",
                     save_images,
@@ -197,7 +197,6 @@ class SignalProcessing:
     def __init__(self, sample_length: float) -> None:
         self.sample_length = sample_length
         self.params = ModelParams()
-        self.utils = DataUtils()
         self.constants = SignalConstants(self.sample_length)
 
     def audio_to_norm_db(
@@ -235,7 +234,7 @@ class SignalProcessing:
             ]
 
             # Normalize
-            norm_loudness_info = self.utils.scale_data_to_range(loudness_info, -1, 1)
+            norm_loudness_info = DataUtils.scale_data_to_range(loudness_info, -1, 1)
             stereo_loudness_info.append(norm_loudness_info)
 
         return np.array(stereo_loudness_info)
@@ -246,7 +245,7 @@ class SignalProcessing:
         """Convert normalized decibel output to raw audio."""
         stereo_audio = []
         for i in range(self.constants.CHANNELS):
-            data = self.utils.scale_data_to_range(
+            data = DataUtils.scale_data_to_range(
                 loudness_info[i], -40, 40
             )  # scale to db
             power_spec = librosa.db_to_power(data) + 1e-10
@@ -405,7 +404,7 @@ class SignalProcessing:
         self, sample_dir: str, output_dir: str, visualize: bool = True
     ) -> None:
         """Encode sample directory as mel spectrograms."""
-        self.utils.delete_DSStore(sample_dir)
+        DataUtils.delete_DSStore(sample_dir)
         real_data = []
 
         # Encode samples
@@ -414,7 +413,7 @@ class SignalProcessing:
                 sample_path = os.path.join(root, sample_name)
 
                 try:
-                    y = self.utils.load_audio(sample_path, self.sample_length)
+                    y = DataUtils.load_audio(sample_path, self.sample_length)
                 except Exception:
                     print("Error loading sample:", sample_path)
                     print("Remove sample and regenerate training data to continue.")
@@ -424,16 +423,16 @@ class SignalProcessing:
                 real_data.append(loudness_data)
 
                 if visualize and np.random.rand() < 0.005:
-                    self.utils.graph_spectrogram(loudness_data, sample_name)
+                    DataUtils.graph_spectrogram(loudness_data, sample_name)
 
-        self.utils.save_loudness_data(output_dir, np.array(real_data))
+        DataUtils.save_loudness_data(output_dir, np.array(real_data))
 
     def stft_and_istft(
         self, sample_path: str, file_name: str, visualize: bool = False
     ) -> None:
         """Perform a STFT and ISTFT operation."""
         # Load data
-        y = self.utils.load_audio(sample_path, self.sample_length)
+        y = DataUtils.load_audio(sample_path, self.sample_length)
 
         # Process data
         stft = self.audio_to_norm_db(y)
@@ -453,8 +452,8 @@ class SignalProcessing:
         )
 
         save_path = os.path.join(self.params.outputs_dir, f"{file_name}.wav")
-        self.utils.save_audio(save_path, istft)
+        DataUtils.save_audio(save_path, istft)
 
         if visualize is True:
-            self.utils.graph_spectrogram(stft, "stft")
-            self.utils.graph_spectrogram(vis_istft, "post istft")
+            DataUtils.graph_spectrogram(stft, "stft")
+            DataUtils.graph_spectrogram(vis_istft, "post istft")

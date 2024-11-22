@@ -12,7 +12,6 @@ from utils.helpers import (
 
 # Load params
 model_params = ModelParams()
-utils = DataUtils()
 training_params = TrainingParams()
 model_utils = ModelUtils(model_params.sample_length)
 signal_processing = SignalProcessing(model_params.sample_length)
@@ -24,7 +23,7 @@ signal_processing.encode_sample_directory(
 )
 
 
-all_spectrograms = utils.load_loudness_data(model_params.compiled_data_path)
+all_spectrograms = DataUtils.load_loudness_data(model_params.compiled_data_path)
 all_spectrograms = torch.FloatTensor(all_spectrograms)
 print("Data encoded:", all_spectrograms.shape)
 

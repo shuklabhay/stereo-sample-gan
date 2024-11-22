@@ -164,6 +164,5 @@ class Critic(nn.Module):
         return features
 
     def forward(self, x):
-        # Convulve
         x = self.conv_blocks(x)
         return x
