@@ -1,4 +1,4 @@
-# StereoSampleGAN: A Computationally Inexpensive Approach High Fidelity Stereo Audio Generation.
+# StereoSampleGAN: High-Fidelity Stereo Audio Generation
 
 Abhay Shukla\
 abhayshuklavtr@gmail.com\
@@ -54,13 +54,17 @@ This process has been validated to preserve audio information. When tested 100 r
 
 ### 4.1. Architecture
 
-This work utilizes a GAN architecture to create high-fidelity audio, exploiting adversaial loss to promote realism and detail within generated audio. To address the GANs training instability, this work utilizes a Wasserstein GAN and gradient penalty (WGAN-GP). The Wasserstein distance provides a stable measure of divergence between real and generated audio distributions compared to typical GAN loss functions, and minimizing this distance through the WGAN-GP framework empircally improves training stability and promotes convergence. In this work, the switch to a WGAN architecture from a standard GAN was instrumental in creating a model that could consistently converge to model that generated actual audio over noise.
+StereoSampleGAN is designed specifically for high-fidelity stereo audio generation using a Wasserstein GAN with gradient penalty (WGAN-GP), a combination of deep convolutional networks, and linear attention mechanisms to promote realism and detail within generated audio.
 
-VISION TRANSFORMER
+The generator starts with a fully connected layer that projects a latent vector into an initial feature map, which is then passed through numerous resize convolution blocks. The resize convolution blocks upscale the feature map while applying batch normalizations, leaky ReLU activations, and dropout to introduce non-linearity and regularization. Utilizing resize convolution blocks also prevent the checkerboard artifact[4] commonly found in GANs that use transposed convolutions. The final block in the generator generates the two channel 256x256 mel spectrogram.
 
-The final generator passes 128 latent dimensions into six transpose convolution blocks blocks, the first five consisting each of a 2D transpose convolution and batch normalization followed by a Leaky ReLU activation and dropout layer. The final block contains a 2D transpose convolution and hyperbolic tangent activation, creating a 256 by 256 representation of audio with values between -1 to 1.
+[figure of generator]
 
-The Critic consists of six convolution blocks, converting a 256 by 256 representation of audio to a single value, an approximation of the wasterstien distance. The critic utilizes seven 2D convolution blocks with spectral normalization with to stabilize training, batch normalization, a Leaky ReLU activation, and a dropout layer, except for the first layer which does not utilize batch normalization and the third layer which includes a Linear Attention mechanism to assist the model in understanding contextual relationships in feature maps and prevenent the checkerboard issue audio generation is often plagued with. After these operations, a final 2D convolution with spectral normalization is applied and the result is flattened, returning single value wasserstein distance approximations.
+The critic (discriminator) uses several convolutional layers with spectral normalization to stabilize training. Each convolutional layer contains leaky ReLU activations, batch normalization, and dropout to ensure smooth gradient flow and prevent overfitting and model collapse. After the third convolutional layer, a linear attention mechanism is introduced to capture longer range dependencies within the complex mid-level feature maps. This strategic positioning optimizes the critic's performance by extracting local and global feature interactions from complex mid-level feature maps that abstract enough to capture meaningful information, large enough to retain essential context for effective learning, and small enough to process without excessive computational cost. The critic returns a single scalar value: the similarity between distributions of generated and real audio.
+
+[figure of critic]
+
+By leveraging the WGAN-GP architecture, StereoSampleGAN benefits from stable adversarial training, enabling the generation of detailed, high-fidelity stereo audio while overcoming the computational inefficiencies and resolution limitations of previous models like WaveNet. By optimizing the generator with resize convolution blocks and the critic with attention mechanisms and spectral normalization, StereoSampleGAN's architecture strikes a balance between high-quality output and computational efficiency.
 
 ### 4.2. Training
 
@@ -71,6 +75,10 @@ The generator and critic both use custom loss metrics to better understand and r
 The usage of wasserstein distance based metrics is crucial here as the comparison of distributions between generated and real audio also the model to capture complexities of audio more effectively than a standard GAN. The variety of training data allows effective comparison of generated and real audio in both the generator and critic loss metrics without leading to model collapse.
 
 ## 5. Results and Discussion
+
+- kinda see shape starting to form in 1-2 epochs
+- for percussion VERY good (even then some samples kinda wonky n weird tho), tonal samples like chords a lot less (nothing forcing it to be harmonic, should learn minor chord realtions and stuff in theory but cant be like SO many different styles of chords and root notes and stuff -- this is where variation score stuff comes in)
+- probbaly wont be that good for speech too
 
 In all training cases, the model converged to a solution in 4-7 epochs with custom loss metrics and wasserstein distance reaching absolute values under 2. These convergences suggest the model is sucessfully able to create audio representations very similar to the training examples. This model presents a 99.60-99.77% reduction in training epoch count compared to SpecGAN, the most similar existing model architecture and utilizes 617,964 paramaters, 177,858 for the critic and 440,106 for the generator, which is 9.56 times less than exisitng models like WaveFlow[4]. A crucial part of the difference is likely the usage of spectrograms in this data over raw data
 
@@ -90,7 +98,5 @@ This model architecture provides important contributions to the field of audio g
 
 [1] https://arxiv.org/abs/1609.03499
 [2] https://arxiv.org/abs/1711.10433
-
-[2] https://arxiv.org/abs/1802.04208
-[3] https://distill.pub/2016/deconv-checkerboard/
-[4] https://arxiv.org/abs/1912.01219
+[3] https://arxiv.org/abs/1802.04208
+[4] https://distill.pub/2016/deconv-checkerboard/
