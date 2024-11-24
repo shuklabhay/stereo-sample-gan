@@ -3,16 +3,30 @@ name: On Push
 on: [push]
 
 jobs:
-  build:
+  black-lint:
+    name: Check formatting
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10"]
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Run black formatter
-        uses: rickstaa/action-black@v1.3.3
+          python-version: "3.12.3"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black
+
+      - name: Run Black formatter
+        run: |
+          black --check .
+
+      - name: Fail if code not formatted correctly
+        if: ${{ failure() }}
+        run: |
+          echo "Code is not formatted correctly. Please format with Black."
+          exit 1
