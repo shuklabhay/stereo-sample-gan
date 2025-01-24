@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
-
 from utils.helpers import ModelParams, SignalConstants
 
 
@@ -12,7 +11,7 @@ class ResizeConvBlock(nn.Module):
         super(ResizeConvBlock, self).__init__()
 
         layers = [
-            nn.Upsample(scale_factor=scale_factor, mode="nearest"),
+            nn.Upsample(scale_factor=scale_factor, mode="bicubic", align_corners=True),
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
         ]
 

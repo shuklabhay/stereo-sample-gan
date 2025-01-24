@@ -18,7 +18,7 @@ signal_processing = SignalProcessing(model_params.sample_length)
 # Load data
 print("Encoding audio data for", model_params.selected_model)
 signal_processing.encode_sample_directory(
-    model_params.training_audio_dir, model_params.compiled_data_path, False
+    model_params.training_audio_dir, model_params.compiled_data_path
 )
 
 

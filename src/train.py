@@ -2,17 +2,22 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from torch.optim.lr_scheduler import ExponentialLR
+from accelerate import Accelerator
+from accelerate.utils import DistributedDataParallelKwargs, set_seed
+from architecture import Critic, Generator
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.optim.rmsprop import RMSprop
 from torch.utils.data import DataLoader
-
-from architecture import Critic, Generator
+from tqdm import tqdm
 from utils.helpers import DataUtils, ModelParams, ModelUtils, TrainingParams
 
 # Initialize parameters
 model_params = ModelParams()
 training_params = TrainingParams()
 model_utils = ModelUtils(model_params.sample_length)
+
+ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+accelerator = Accelerator(kwargs_handlers=[ddp_kwargs])
 
 
 def compute_g_loss(
@@ -130,8 +135,8 @@ def train_epoch(
     dataloader: DataLoader,
     optimizer_G: RMSprop,
     optimizer_C: RMSprop,
-    scheduler_G: ExponentialLR,
-    scheduler_C: ExponentialLR,
+    scheduler_G: CosineAnnealingWarmRestarts,
+    scheduler_C: CosineAnnealingWarmRestarts,
     device: torch.device,
     epoch_number: int,
 ) -> Tuple[float, float, float]:
@@ -140,7 +145,9 @@ def train_epoch(
     critic.train()
     total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
 
-    for i, (real_audio_data,) in enumerate(dataloader):
+    for i, (real_audio_data,) in tqdm(
+        enumerate(dataloader), disable=not accelerator.is_main_process()
+    ):
         batch = real_audio_data.size(0)
         real_audio_data = real_audio_data.to(device)
 
@@ -195,14 +202,14 @@ def validate(
     critic: Critic,
     dataloader: DataLoader,
     device: torch.device,
-) -> Tuple[float, float, float]:
+) -> Tuple[float, float, float, torch.Tensor]:
     """Validation."""
     generator.eval()
     critic.eval()
     total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
 
     with torch.no_grad():
-        for (real_audio_data,) in dataloader:
+        for (real_audio_data,) in tqdm(dataloader):
             batch = real_audio_data.size(0)
             real_audio_data = real_audio_data.to(device)
 
@@ -235,11 +242,13 @@ def validate(
         total_g_loss / len(dataloader),
         total_c_loss / len(dataloader),
         total_w_dist / len(dataloader),
+        fake_audio_data,
     )
 
 
 def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     """Training loop."""
+    # Prepare model optimizer and scheduler
     generator = Generator()
     critic = Critic()
     optimizer_G = RMSprop(
@@ -248,17 +257,25 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     optimizer_C = RMSprop(
         critic.parameters(), lr=training_params.LR_C, weight_decay=0.05
     )
+    scheduler_G = CosineAnnealingWarmRestarts(
+        optimizer_G, T_0=50, T_mult=2, eta_min=training_params.LR_G / 100
+    )
+    scheduler_C = CosineAnnealingWarmRestarts(
+        optimizer_C, T_0=50, T_mult=2, eta_min=training_params.LR_C / 100
+    )
 
-    scheduler_G = ExponentialLR(optimizer_G, gamma=training_params.LR_DECAY)
-    scheduler_C = ExponentialLR(optimizer_C, gamma=training_params.LR_DECAY)
-
-    device = model_utils.get_device()
-    generator.to(device)
-    critic.to(device)
+    # Prepare accelerate
+    generator, discriminator, optimizer_g, optimizer_d, train_loader = (
+        accelerator.prepare(
+            generator, discriminator, optimizer_g, optimizer_d, train_loader
+        )
+    )
+    generator.to(accelerator.device)
+    critic.to(accelerator.device)
 
     best_val_w_dist = float("inf")
     epochs_no_improve = 0
-    patience = 3
+    patience = 10
     warmup = 4
 
     for epoch in range(training_params.N_EPOCHS):
@@ -271,45 +288,46 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             optimizer_C,
             scheduler_G,
             scheduler_C,
-            device,
+            accelerator.device,
             epoch,
         )
-        print(
-            f"[{epoch+1}/{training_params.N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}, W Dist: {train_w_dist:.6f}"
-        )
-
-        # Validate
-        val_g_loss, val_c_loss, val_w_dist = validate(
-            generator, critic, val_loader, device
-        )
-        print(
-            f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
-        )
-
-        # Generate example audio
-        if (epoch + 1) % training_params.SHOW_GENERATED_INTERVAL == 0:
-            examples_to_generate = 3
-            z = torch.randn(examples_to_generate, model_params.LATENT_DIM, 1, 1).to(
-                device
+        if accelerator.is_main_process():
+            print(
+                f"[{epoch+1}/{training_params.N_EPOCHS}] Train - G Loss: {train_g_loss:.6f}, C Loss: {train_c_loss:.6f}, W Dist: {train_w_dist:.6f}"
             )
-            generated_audio = generator(z).squeeze()
 
-            for i in range(examples_to_generate):
-                generated_audio_np = generated_audio[i].cpu().detach().numpy()
-                DataUtils.graph_spectrogram(
-                    generated_audio_np,
-                    f"Epoch {epoch + 1} Generated Audio #{i + 1}",
-                )
+            # Validate
+            val_g_loss, val_c_loss, val_w_dist, val_items = validate(
+                generator, critic, val_loader, accelerator.device
+            )
+            print(
+                f"------ Val ------ G Loss: {val_g_loss:.6f}, C Loss: {val_c_loss:.6f}, W Dist: {val_w_dist:.6f}"
+            )
 
-        # Early exit/saving
-        if (epoch + 1) >= warmup:
-            model_utils.save_model(generator)
-            if np.abs(val_w_dist) < best_val_w_dist:
+            # # Generate example audio
+            # if (epoch + 1) % training_params.SHOW_GENERATED_INTERVAL == 0:
+            #     examples_to_generate = 3
+            #     z = torch.randn(examples_to_generate, model_params.LATENT_DIM, 1, 1).to(
+            #         accelerator.device
+            #     )
+            #     generated_audio = generator(z).squeeze()
+
+            #     for i in range(examples_to_generate):
+            #         generated_audio_np = generated_audio[i].cpu().detach().numpy()
+            # DataUtils.graph_spectrogram(
+            #             generated_audio_np,
+            #             f"Epoch {epoch + 1} Generated Audio #{i + 1}",
+            #         )
+
+            # Early exit
+            if (epoch + 1) >= warmup and np.abs(val_w_dist) < best_val_w_dist:
+                model_utils.save_model(generator)
                 best_val_w_dist = np.abs(val_w_dist)
                 epochs_no_improve = 0
             else:
                 epochs_no_improve += 1
                 print(f"epochs without w_dist improvement: {epochs_no_improve}")
-                if epochs_no_improve >= patience:
-                    print("Early stopping triggered")
-                    break
+
+        if epochs_no_improve >= patience:
+            print("Early stopping triggered")
+            break

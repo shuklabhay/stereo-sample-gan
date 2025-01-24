@@ -19,7 +19,7 @@ model_selection = ModelType.SNARE
 @dataclass
 class ModelParams:
     LATENT_DIM = 128
-    BATCH_SIZE = 16
+    BATCH_SIZE = 32
     DROPOUT_RATE = 0.2
 
     def __init__(self):

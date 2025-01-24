@@ -1,3 +1,4 @@
+accelerate==1.2.1
 appnope==0.1.4
 asttokens==2.4.1
 attrs==23.2.0
@@ -78,6 +79,7 @@ threadpoolctl==3.5.0
 tinycss2==1.3.0
 torch==2.5.1
 tornado==6.4.1
+tqdm==4.66.5
 traitlets==5.14.3
 typing_extensions==4.12.2
 urllib3==2.2.2

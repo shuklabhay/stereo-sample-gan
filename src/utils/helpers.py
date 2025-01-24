@@ -1,4 +1,5 @@
 import os
+
 import librosa
 import numpy as np
 import plotly.graph_objects as go
@@ -6,10 +7,9 @@ import plotly.subplots as sp
 import soundfile as sf
 import torch
 from numpy.typing import NDArray
-import torch
 from torch import nn
 
-from .constants import SignalConstants, TrainingParams, ModelParams
+from .constants import ModelParams, SignalConstants, TrainingParams
 
 
 class DataUtils:
@@ -400,30 +400,24 @@ class SignalProcessing:
 
         return y
 
-    def encode_sample_directory(
-        self, sample_dir: str, output_dir: str, visualize: bool = True
-    ) -> None:
+    def encode_sample_directory(self, sample_dir: str, output_dir: str) -> None:
         """Encode sample directory as mel spectrograms."""
         DataUtils.delete_DSStore(sample_dir)
         real_data = []
 
-        # Encode samples
+        # Encode wav samples
         for root, _, all_samples in os.walk(sample_dir):
-            for sample_name in all_samples:
+            for sample_name in [f for f in all_samples if f.lower().endswith(".wav")]:
                 sample_path = os.path.join(root, sample_name)
-
                 try:
                     y = DataUtils.load_audio(sample_path, self.sample_length)
                 except Exception:
-                    print("Error loading sample:", sample_path)
+                    print(f"Error loading sample: {sample_path}")
                     print("Remove sample and regenerate training data to continue.")
                     break
 
                 loudness_data = self.audio_to_norm_db(y)
                 real_data.append(loudness_data)
-
-                if visualize and np.random.rand() < 0.005:
-                    DataUtils.graph_spectrogram(loudness_data, sample_name)
 
         DataUtils.save_loudness_data(output_dir, np.array(real_data))
 
