@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
-
 from train import training_loop
 from utils.helpers import (
     DataUtils,
