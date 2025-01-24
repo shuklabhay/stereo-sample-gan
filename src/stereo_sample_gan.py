@@ -21,7 +21,6 @@ signal_processing.encode_sample_directory(
     model_params.training_audio_dir, model_params.compiled_data_path
 )
 
-
 all_spectrograms = DataUtils.load_loudness_data(model_params.compiled_data_path)
 all_spectrograms = torch.FloatTensor(all_spectrograms)
 print("Data encoded:", all_spectrograms.shape)

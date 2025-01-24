@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import plotly.subplots as sp
 import soundfile as sf
 import torch
+from matplotlib import pyplot as plt
 from numpy.typing import NDArray
 from torch import nn
 
@@ -57,6 +58,27 @@ class DataUtils:
         DSStore_path = os.path.join(current_directory, ".DS_Store")
         if os.path.exists(DSStore_path):
             os.remove(DSStore_path)
+
+    @staticmethod
+    def visualize_val_spectrograms(
+        generated_items: torch.Tensor, save_path: str, items_to_visualize: int = 16
+    ) -> None:
+        """Visualize the first 16 generated spectrograms in a 4x4 grid."""
+        # Extract audio
+        samples = generated_items[:items_to_visualize].detach().cpu().numpy().squeeze()
+
+        # Create figure with 4x4 grid
+        fig, axes = plt.subplots(4, 4, figsize=(16, 8))
+        fig.subplots_adjust(hspace=0.1, wspace=0.1)
+
+        # Plot spectrograms
+        for ax, img in zip(axes.flatten(), samples):
+            ax.imshow(img.T, cmap="viridis", aspect="auto", origin="lower")
+            ax.axis("off")
+
+        # Save and close
+        plt.savefig(save_path, bbox_inches="tight", pad_inches=0)
+        plt.close(fig)
 
     @staticmethod
     def graph_spectrogram(

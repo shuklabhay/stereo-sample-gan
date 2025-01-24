@@ -1,6 +1,5 @@
 from utils.helpers import ModelParams, ModelUtils
 
-
 params = ModelParams()
 utils = ModelUtils(params.sample_length)
 

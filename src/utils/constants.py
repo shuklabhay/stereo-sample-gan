@@ -10,7 +10,6 @@ from scipy.signal.windows import hann
 class ModelType(Enum):
     KICKDRUM = "Kickdrum"
     SNARE = "Snare"
-    CHORDSHOT = "ChordShot"
 
 
 model_selection = ModelType.SNARE
