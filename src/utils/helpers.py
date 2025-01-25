@@ -64,6 +64,7 @@ class DataUtils:
     def visualize_val_spectrograms(
         generated_items: torch.Tensor,
         epoch: int,
+        val_w_dist: float,
         save_path: str,
         items_to_visualize: int = 16,
     ) -> None:
@@ -74,19 +75,21 @@ class DataUtils:
 
         # Create figure with 4x4 grid
         fig, axes = plt.subplots(4, 4, figsize=(16, 8))
-        fig.subplots_adjust(hspace=0.3, wspace=0.1, top=0.9)
+        fig.subplots_adjust(hspace=0.2, wspace=0.1, top=0.9)
 
         # Add overall title
-        fig.suptitle(f"Generated Audio Spectrograms: Epoch {epoch+1}", fontsize=16)
+        fig.suptitle(
+            f"Raw Model Output Epoch {epoch+1} -- w_dist = {val_w_dist:.4f}",
+            fontsize=16,
+        )
 
         # Plot spectrograms
-        for idx, (ax, img) in enumerate(zip(axes.flatten(), samples)):
+        for ax, img in zip(axes.flatten(), samples):
             # Add some zero-padding to the image
             padded_img = np.pad(img, pad_width=2, mode="constant", constant_values=0)
 
             ax.imshow(padded_img.T, cmap="viridis", aspect="auto", origin="lower")
             ax.axis("off")
-            ax.set_title(f"Sample {idx+1}", fontsize=8, pad=3)
 
         # Save and close
         plt.savefig(save_path, bbox_inches="tight", pad_inches=0.5)

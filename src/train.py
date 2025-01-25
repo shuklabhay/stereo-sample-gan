@@ -42,12 +42,12 @@ def compute_c_loss(
 ) -> torch.Tensor:
     """Calculate critic loss."""
     wasserstein_dist = calculate_wasserstein_diff(real_validity, fake_validity)
-    spectral_diff = 0.15 * calculate_spectral_diff(real_audio_data, fake_audio_data)
-    spectral_convergence = 0.15 * calculate_spectral_convergence_diff(
-        real_audio_data, fake_audio_data
-    )
+    # spectral_diff = 0.15 * calculate_spectral_diff(real_audio_data, fake_audio_data)
+    # spectral_convergence = 0.15 * calculate_spectral_convergence_diff(
+    #     real_audio_data, fake_audio_data
+    # )
 
-    computed_c_loss = wasserstein_dist + spectral_diff + spectral_convergence
+    computed_c_loss = wasserstein_dist  # + spectral_diff + spectral_convergence
 
     if training:
         gradient_penalty = calculate_gradient_penalty(
@@ -290,7 +290,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         )
 
         print(
-            f"W_Dist: {train_w_dist:.4f} G_Loss: {train_g_loss:.4f} C_Loss: {train_c_loss:.4f},"
+            f"w_dist: {train_w_dist:.4f} g_loss: {train_g_loss:.4f} c_loss: {train_c_loss:.4f},"
         )
 
         # Validate
@@ -298,7 +298,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             generator, critic, val_loader, epoch
         )
         print(
-            f"W_Dist: {val_w_dist:.4f} G_Loss: {val_g_loss:.4f} C_Loss: {val_c_loss:.4f}"
+            f"w_dist: {val_w_dist:.4f} g_loss: {val_g_loss:.4f} c_loss: {val_c_loss:.4f}"
         )
 
         # Visualize
@@ -308,6 +308,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             DataUtils.visualize_val_spectrograms(
                 val_items,
                 epoch,
+                val_w_dist,
                 f"static/{model_selection.name.lower()}_best_val_spectrograms.png",
             )
             model_utils.save_model(generator)
