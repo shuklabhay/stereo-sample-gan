@@ -9,6 +9,7 @@ import torch
 from matplotlib import pyplot as plt
 from numpy.typing import NDArray
 from torch import nn
+from tqdm import tqdm
 
 from .constants import ModelParams, SignalConstants, TrainingParams
 
@@ -61,23 +62,34 @@ class DataUtils:
 
     @staticmethod
     def visualize_val_spectrograms(
-        generated_items: torch.Tensor, save_path: str, items_to_visualize: int = 16
+        generated_items: torch.Tensor,
+        epoch: int,
+        save_path: str,
+        items_to_visualize: int = 16,
     ) -> None:
         """Visualize the first 16 generated spectrograms in a 4x4 grid."""
         # Extract audio
         samples = generated_items[:items_to_visualize].detach().cpu().numpy().squeeze()
+        samples = np.mean(samples, axis=1)
 
         # Create figure with 4x4 grid
         fig, axes = plt.subplots(4, 4, figsize=(16, 8))
-        fig.subplots_adjust(hspace=0.1, wspace=0.1)
+        fig.subplots_adjust(hspace=0.3, wspace=0.1, top=0.9)
+
+        # Add overall title
+        fig.suptitle(f"Generated Audio Spectrograms: Epoch {epoch+1}", fontsize=16)
 
         # Plot spectrograms
-        for ax, img in zip(axes.flatten(), samples):
-            ax.imshow(img.T, cmap="viridis", aspect="auto", origin="lower")
+        for idx, (ax, img) in enumerate(zip(axes.flatten(), samples)):
+            # Add some zero-padding to the image
+            padded_img = np.pad(img, pad_width=2, mode="constant", constant_values=0)
+
+            ax.imshow(padded_img.T, cmap="viridis", aspect="auto", origin="lower")
             ax.axis("off")
+            ax.set_title(f"Sample {idx+1}", fontsize=8, pad=3)
 
         # Save and close
-        plt.savefig(save_path, bbox_inches="tight", pad_inches=0)
+        plt.savefig(save_path, bbox_inches="tight", pad_inches=0.5)
         plt.close(fig)
 
     @staticmethod
@@ -155,7 +167,6 @@ class ModelUtils:
             model.state_dict(),
             self.params.model_save_path,
         )
-        print(f"Model saved at {self.params.model_save_path}")
 
     def load_model(self, model_save_path: str, device: torch.device) -> None:
         """Load model from .pth file."""
@@ -422,14 +433,19 @@ class SignalProcessing:
 
         return y
 
-    def encode_sample_directory(self, sample_dir: str, output_dir: str) -> None:
+    def encode_sample_directory(
+        self, sample_dir: str, selected_model: str, output_dir: str = None
+    ) -> torch.Tensor:
         """Encode sample directory as mel spectrograms."""
         DataUtils.delete_DSStore(sample_dir)
         real_data = []
 
         # Encode wav samples
         for root, _, all_samples in os.walk(sample_dir):
-            for sample_name in [f for f in all_samples if f.lower().endswith(".wav")]:
+            for sample_name in tqdm(
+                [f for f in all_samples if f.lower().endswith(".wav")],
+                desc=f"Encoding {selected_model} audio",
+            ):
                 sample_path = os.path.join(root, sample_name)
                 try:
                     y = DataUtils.load_audio(sample_path, self.sample_length)
@@ -441,7 +457,10 @@ class SignalProcessing:
                 loudness_data = self.audio_to_norm_db(y)
                 real_data.append(loudness_data)
 
-        DataUtils.save_loudness_data(output_dir, np.array(real_data))
+        if output_dir is not None:
+            DataUtils.save_loudness_data(output_dir, np.array(real_data))
+
+        return torch.tensor(np.array(real_data))
 
     def stft_and_istft(
         self, sample_path: str, file_name: str, visualize: bool = False

@@ -116,7 +116,6 @@ class Critic(nn.Module):
     def __init__(self):
         super(Critic, self).__init__()
 
-        # Convolution blocks
         self.conv_blocks = nn.Sequential(
             spectral_norm(
                 nn.Conv2d(
@@ -151,17 +150,16 @@ class Critic(nn.Module):
         )
 
     def extract_features(self, x):
-        """Extract features for x from specific layers."""
-        features = [
-            x
-            for i, layer in enumerate(self.conv_blocks)
-            if i == 0
-            or isinstance(layer, LinearAttention)
-            or i == len(self.conv_blocks) - 2
-        ]
-
+        features = []
+        for i, layer in enumerate(self.conv_blocks):
+            x = layer(x)
+            if (
+                i == 0
+                or isinstance(layer, LinearAttention)
+                or i == len(self.conv_blocks) - 2
+            ):
+                features.append(x)
         return features
 
     def forward(self, x):
-        x = self.conv_blocks(x)
-        return x
+        return self.conv_blocks(x)

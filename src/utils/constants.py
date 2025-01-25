@@ -17,8 +17,9 @@ model_selection = ModelType.SNARE
 
 @dataclass
 class ModelParams:
+    DEVICE = "cuda:7"
     LATENT_DIM = 128
-    BATCH_SIZE = 32
+    BATCH_SIZE = 64
     DROPOUT_RATE = 0.2
 
     def __init__(self):
@@ -55,11 +56,10 @@ class ModelParams:
 
 @dataclass
 class TrainingParams:
-    LR_G = 0.003
-    LR_C = 0.004
-    LR_DECAY = 0.9
-    LAMBDA_GP = 5
     CRITIC_STEPS = 5
+    LR_G = 5e-5
+    LR_C = 5e-5
+    LAMBDA_GP = 10
     N_EPOCHS = 20
 
     @property
