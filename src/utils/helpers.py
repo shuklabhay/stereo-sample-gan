@@ -72,27 +72,38 @@ class DataUtils:
         # Extract audio
         samples = generated_items[:items_to_visualize].detach().cpu().numpy().squeeze()
         samples = np.mean(samples, axis=1)
+        color_min, color_max = -1, 1
 
         # Create figure with 4x4 grid
-        fig, axes = plt.subplots(4, 4, figsize=(16, 8))
-        fig.subplots_adjust(hspace=0.2, wspace=0.1, top=0.9)
+        fig, axes = plt.subplots(4, 4, figsize=(16, 9))
+        fig.subplots_adjust(hspace=0.1, wspace=0.1, top=0.95, right=0.85)
 
         # Add overall title
         fig.suptitle(
-            f"Raw Model Output Epoch {epoch+1} -- w_dist = {val_w_dist:.4f}",
-            fontsize=16,
+            f"Raw Model Output Epoch {epoch+1} - w_dist={val_w_dist:.4f}",
+            fontsize=10,
         )
 
         # Plot spectrograms
         for ax, img in zip(axes.flatten(), samples):
-            # Add some zero-padding to the image
-            padded_img = np.pad(img, pad_width=2, mode="constant", constant_values=0)
-
-            ax.imshow(padded_img.T, cmap="viridis", aspect="auto", origin="lower")
+            im = ax.imshow(
+                img.T,
+                cmap="viridis",
+                aspect="auto",
+                origin="lower",
+                vmin=color_min,
+                vmax=color_max,
+            )
             ax.axis("off")
 
+        # Add label bar to the right
+        cax = fig.add_axes([0.88, 0.1, 0.02, 0.8])
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("Intensity (Normalized dB)", rotation=270, labelpad=10)
+        cbar.outline.set_visible(False)
+
         # Save and close
-        plt.savefig(save_path, bbox_inches="tight", pad_inches=0.5)
+        plt.savefig(save_path, bbox_inches="tight", pad_inches=0.25)
         plt.close(fig)
 
     @staticmethod

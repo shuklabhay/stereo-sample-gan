@@ -47,7 +47,7 @@ def compute_c_loss(
     #     real_audio_data, fake_audio_data
     # )
 
-    computed_c_loss = wasserstein_dist  # + spectral_diff + spectral_convergence
+    computed_c_loss = wasserstein_dist  # + spectral_diff  # + spectral_convergence
 
     if training:
         gradient_penalty = calculate_gradient_penalty(
@@ -140,7 +140,7 @@ def train_epoch(
 
     for i, (real_audio_data,) in tqdm(
         enumerate(dataloader),
-        desc=f"Train epoch{epoch_number+1}",
+        desc=f"EPOCH{epoch_number+1} Train",
     ):
         batch = real_audio_data.size(0)
         real_audio_data = real_audio_data.to(model_params.DEVICE)
@@ -207,7 +207,7 @@ def validate(
     total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
 
     with torch.no_grad():
-        for (real_audio_data,) in tqdm(dataloader, desc=f"Val epoch{epoch_number+1}"):
+        for (real_audio_data,) in tqdm(dataloader, desc=f"EPOCH{epoch_number+1} Val"):
             batch = real_audio_data.size(0)
             real_audio_data = real_audio_data.to(model_params.DEVICE)
 
@@ -274,7 +274,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     best_val_w_dist = float("inf")
     epochs_no_improve = 0
     patience = 10
-    warmup = 4
+    warmup = 5
 
     for epoch in range(training_params.N_EPOCHS):
         # Train
@@ -290,7 +290,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         )
 
         print(
-            f"w_dist: {train_w_dist:.4f} g_loss: {train_g_loss:.4f} c_loss: {train_c_loss:.4f},"
+            f"TRAIN w_dist: {train_w_dist:.4f} g_loss: {train_g_loss:.4f} c_loss: {train_c_loss:.4f},"
         )
 
         # Validate
@@ -298,21 +298,18 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             generator, critic, val_loader, epoch
         )
         print(
-            f"w_dist: {val_w_dist:.4f} g_loss: {val_g_loss:.4f} c_loss: {val_c_loss:.4f}"
+            f"VAL w_dist: {val_w_dist:.4f} g_loss: {val_g_loss:.4f} c_loss: {val_c_loss:.4f}"
         )
 
-        # Visualize
+        # End of epoch handling
         new_best = np.abs(val_w_dist) < best_val_w_dist
         past_warmup = (epoch + 1) >= warmup
-        if new_best:
-            DataUtils.visualize_val_spectrograms(
-                val_items,
-                epoch,
-                val_w_dist,
-                f"static/{model_selection.name.lower()}_best_val_spectrograms.png",
-            )
-            model_utils.save_model(generator)
-            print(f"New best model saved at w_dist {val_w_dist:.4f}")
+        DataUtils.visualize_val_spectrograms(
+            val_items,
+            epoch,
+            val_w_dist,
+            f"static/{model_selection.name.lower()}_progress_val_spectrograms.png",
+        )
 
         # Early exit
         if past_warmup:
@@ -322,7 +319,17 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             else:
                 epochs_no_improve += 1
                 print(f"Epochs without w_dist improvement: {epochs_no_improve}")
-
         if epochs_no_improve >= patience:
             print("Early stopping triggered")
             break
+
+        # Visualize
+        if new_best:
+            DataUtils.visualize_val_spectrograms(
+                val_items,
+                epoch,
+                val_w_dist,
+                f"static/{model_selection.name.lower()}_best_val_spectrograms.png",
+            )
+            model_utils.save_model(generator)
+            print(f"New best model saved at w_dist {val_w_dist:.4f}")

@@ -7,7 +7,7 @@ from utils.helpers import ModelParams, SignalConstants
 
 # Model Components
 class ResizeConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, scale_factor=2, final_block=False):
+    def __init__(self, in_channels, out_channels, scale_factor=2):
         super(ResizeConvBlock, self).__init__()
 
         layers = [
@@ -15,16 +15,13 @@ class ResizeConvBlock(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
         ]
 
-        if not final_block:
-            layers.extend(
-                [
-                    nn.BatchNorm2d(out_channels),
-                    nn.LeakyReLU(0.2),
-                    nn.Dropout(ModelParams.DROPOUT_RATE),
-                ]
-            )
-        else:
-            layers.append(nn.Tanh())
+        layers.extend(
+            [
+                nn.BatchNorm2d(out_channels),
+                nn.LeakyReLU(0.2),
+                nn.Dropout(ModelParams.DROPOUT_RATE),
+            ]
+        )
 
         self.block = nn.Sequential(*layers)
 
@@ -57,9 +54,11 @@ class Generator(nn.Module):
             ResizeConvBlock(16, 8),  # 32x32 -> 64x64
             ResizeConvBlock(8, 8),  # 64x64 -> 128x128
             ResizeConvBlock(
-                8, SignalConstants.CHANNELS, scale_factor=2, final_block=True
+                8, SignalConstants.CHANNELS, scale_factor=2
             ),  # 128x128 -> 256x256
         )
+
+        self.htan = nn.Tanh()
 
     def forward(self, z):
         batch_size = z.size(0)
@@ -80,6 +79,7 @@ class Generator(nn.Module):
 
         # Pass through resize blocks
         x = self.resize_blocks(x)
+        x = self.htan(x)
         return x
 
 
@@ -150,6 +150,7 @@ class Critic(nn.Module):
         )
 
     def extract_features(self, x):
+        """Extract features for x from specific layers."""
         features = []
         for i, layer in enumerate(self.conv_blocks):
             x = layer(x)
