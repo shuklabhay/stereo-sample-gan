@@ -11,26 +11,26 @@ from numpy.typing import NDArray
 from torch import nn
 from tqdm import tqdm
 
-from .constants import ModelParams, SignalConstants, TrainingParams
+from .constants import ModelParams, SignalConstants
 
 
 class DataUtils:
     @staticmethod
     def save_loudness_data(
-        file_path: str, loudness_information: NDArray[np.float64]
+        file_path: str, loudness_information: NDArray[np.float32]
     ) -> None:
         """Save normalized loudness data array."""
         np.save(file_path, loudness_information)
 
     @staticmethod
-    def load_loudness_data(file_path: str) -> NDArray[np.float64]:
+    def load_loudness_data(file_path: str) -> NDArray[np.float32]:
         """Load normalized loudness data array."""
         return np.load(file_path, allow_pickle=True)
 
     @staticmethod
-    def load_audio(audio_path: str, sample_length: float) -> NDArray[np.float64]:
+    def load_audio(audio_path: str, sample_length: float) -> NDArray[np.float32]:
         """Load raw audio as array."""
-        y, sr = librosa.load(audio_path, sr=SignalConstants.SR, mono=False)
+        y, _ = librosa.load(audio_path, sr=SignalConstants.SR, mono=False)
         if y.ndim == 1:
             y = np.stack((y, y), axis=0)
         y = librosa.util.fix_length(
@@ -39,18 +39,17 @@ class DataUtils:
         return y
 
     @staticmethod
-    def save_audio(audio_path: str, audio: NDArray[np.float64]) -> None:
+    def save_audio(audio_path: str, audio: NDArray[np.float32]) -> None:
         """Save raw audio as audio."""
         sf.write(audio_path, audio.T, SignalConstants.SR)
 
     @staticmethod
     def scale_data_to_range(
-        data: NDArray[np.float64], new_min: float, new_max: float
-    ) -> NDArray[np.float64]:
+        data: NDArray[np.float32], new_min: float, new_max: float
+    ) -> NDArray[np.float32]:
         old_min, old_max = np.min(data), np.max(data)
         old_range, new_range = old_max - old_min, new_max - new_min
         scaled_data = (data - old_min) * (new_range / (old_range + 1e-6)) + new_min
-        scaled_data = np.round(scaled_data, decimals=6)
         return scaled_data
 
     @staticmethod
@@ -61,10 +60,9 @@ class DataUtils:
             os.remove(DSStore_path)
 
     @staticmethod
-    def visualize_val_spectrograms(
+    def visualize_spectrogram_grid(
         generated_items: torch.Tensor,
-        epoch: int,
-        val_w_dist: float,
+        title: str,
         save_path: str,
         items_to_visualize: int = 16,
     ) -> None:
@@ -72,7 +70,7 @@ class DataUtils:
         # Extract audio
         samples = generated_items[:items_to_visualize].detach().cpu().numpy().squeeze()
         samples = np.mean(samples, axis=1)
-        color_min, color_max = -1, 1
+        color_min, color_max = 0, 1
 
         # Create figure with 4x4 grid
         fig, axes = plt.subplots(4, 4, figsize=(16, 9))
@@ -80,7 +78,7 @@ class DataUtils:
 
         # Add overall title
         fig.suptitle(
-            f"Raw Model Output Epoch {epoch+1} - w_dist={val_w_dist:.4f}",
+            title,
             fontsize=10,
         )
 
@@ -108,7 +106,7 @@ class DataUtils:
 
     @staticmethod
     def graph_spectrogram(
-        audio_data: NDArray[np.float64],
+        audio_data: NDArray[np.float32],
         sample_name: str,
         save_images: bool = False,
     ) -> None:
@@ -168,10 +166,9 @@ class DataUtils:
 
 class ModelUtils:
     def __init__(self, sample_length: float) -> None:
-        from architecture import Generator
+        from architecture import Generator  # Avoid circular import
 
         self.generator = Generator()
-        self.constants = TrainingParams()
         self.params = ModelParams()
         self.signal_processing = SignalProcessing(sample_length)
 
@@ -193,18 +190,11 @@ class ModelUtils:
         )
         self.generator.eval()
 
-    @staticmethod
-    def get_device() -> torch.device:
-        """Get device to run model."""
-        return torch.device("cpu")  # Hardware limitations
-
     def generate_audio(
         self, model_save_path: str, generation_count: int = 2, save_images: bool = False
     ) -> None:
         """Generate audio with saved model."""
-        device = self.get_device()
-
-        self.load_model(model_save_path, device)
+        self.load_model(model_save_path, ModelParams.DEVICE)
 
         # Generate audio
         z = torch.randn(generation_count, ModelParams.LATENT_DIM, 1, 1)
@@ -216,16 +206,15 @@ class ModelUtils:
         # Visualize and save audio
         for i in range(generation_count):
             current_sample = generated_output[i]
-            audio_info = self.signal_processing.norm_db_to_audio(current_sample)
+            audio_info = self.signal_processing.norm_spec_to_audio(current_sample)
             audio_save_path = os.path.join(
                 self.params.outputs_dir,
                 f"{self.params.generated_audio_name}_{i + 1}.wav",
             )
-
             DataUtils.save_audio(audio_save_path, audio_info)
 
             if self.params.visualize_generated:
-                vis_signal_after_istft = self.signal_processing.audio_to_norm_db(
+                vis_signal_after_istft = self.signal_processing.audio_to_norm_spec(
                     audio_info
                 )
                 DataUtils.graph_spectrogram(
@@ -246,9 +235,9 @@ class SignalProcessing:
         self.params = ModelParams()
         self.constants = SignalConstants(self.sample_length)
 
-    def audio_to_norm_db(
-        self, channel_info: NDArray[np.float64]
-    ) -> NDArray[np.float64]:
+    def audio_to_norm_spec(
+        self, channel_info: NDArray[np.float32]
+    ) -> NDArray[np.float32]:
         """Convert raw audio to normalized decibel data points."""
         stereo_loudness_info = []
 
@@ -286,9 +275,9 @@ class SignalProcessing:
 
         return np.array(stereo_loudness_info)
 
-    def norm_db_to_audio(
-        self, loudness_info: NDArray[np.float64]
-    ) -> NDArray[np.float64]:
+    def norm_spec_to_audio(
+        self, loudness_info: NDArray[np.float32]
+    ) -> NDArray[np.float32]:
         """Convert normalized decibel output to raw audio."""
         stereo_audio = []
         for i in range(self.constants.CHANNELS):
@@ -303,8 +292,8 @@ class SignalProcessing:
         return np.array(stereo_audio)
 
     def mel_spec_to_linear_spec(
-        self, mel_spectrogram: NDArray[np.float64]
-    ) -> NDArray[np.float64]:
+        self, mel_spectrogram: NDArray[np.float32]
+    ) -> NDArray[np.float32]:
         """Reconstruct linear spectrogram from mel spectrogram."""
         mel_basis = librosa.filters.mel(
             sr=self.constants.SR,
@@ -318,9 +307,9 @@ class SignalProcessing:
 
         # Convert to linear spec
         mel_basis_reg = mel_basis @ mel_basis.T + 1e-4 * np.eye(mel_basis.shape[0])
-        inv_mel_basis_reg = np.linalg.inv(mel_basis_reg)
+        inv_mel_basis_reg = np.linalg.inv(mel_basis_reg).astype(np.float32)
         mel_pseudo = mel_basis.T @ inv_mel_basis_reg
-        linear_spectrogram = mel_pseudo @ mel_spectrogram.T
+        linear_spectrogram = (mel_pseudo @ mel_spectrogram.T).astype(np.float32)
 
         # Calc params for frequency-dependent smoothing
         freqs = librosa.fft_frequencies(
@@ -334,7 +323,7 @@ class SignalProcessing:
             smoothing_windows.append(window / window.sum())
 
         # Apply smoothing on frequency-dependent windows
-        linear_spectrogram_smooth = np.zeros_like(linear_spectrogram)
+        linear_spectrogram_smooth = np.zeros_like(linear_spectrogram, dtype=np.float32)
         for i in range(linear_spectrogram.shape[0]):
             window = smoothing_windows[i]
             pad_size = len(window) // 2
@@ -342,7 +331,7 @@ class SignalProcessing:
             linear_spectrogram_smooth[i] = np.convolve(padded, window, mode="valid")
 
         # Frequency-dependent scaling
-        scaling_factors = np.ones(len(freqs))
+        scaling_factors = np.ones(len(freqs), dtype=np.float32)
         transition_region = (freqs >= 800) & (freqs <= 1200)
         scaling_factors[transition_region] = 0.7
         linear_spectrogram_smooth *= scaling_factors[:, np.newaxis]
@@ -354,8 +343,8 @@ class SignalProcessing:
         return linear_amplitude_spectrogram.T
 
     def fast_griffin_lim_istft(
-        self, linear_magnitudes: NDArray[np.float64]
-    ) -> NDArray[np.float64]:
+        self, linear_magnitudes: NDArray[np.float32]
+    ) -> NDArray[np.float32]:
         """Reconstruct audio from linear spectrogram."""
         iterations = 16
         momentum = 0.95
@@ -439,7 +428,7 @@ class SignalProcessing:
         )
 
         # Slightly fade start and end
-        fade_length = 128  # samples
+        fade_length = 16
         fade_in = np.linspace(0, 1, fade_length)
         fade_out = np.linspace(1, 0, fade_length)
         y[:fade_length] *= fade_in
@@ -468,7 +457,7 @@ class SignalProcessing:
                     print("Remove sample and regenerate training data to continue.")
                     break
 
-                loudness_data = self.audio_to_norm_db(y)
+                loudness_data = self.audio_to_norm_spec(y)
                 real_data.append(loudness_data)
 
         if output_dir is not None:
@@ -484,9 +473,9 @@ class SignalProcessing:
         y = DataUtils.load_audio(sample_path, self.sample_length)
 
         # Process data
-        stft = self.audio_to_norm_db(y)
-        istft = self.norm_db_to_audio(stft)
-        vis_istft = self.audio_to_norm_db(istft)
+        stft = self.audio_to_norm_spec(y)
+        istft = self.norm_spec_to_audio(stft)
+        vis_istft = self.audio_to_norm_spec(istft)
 
         # Visualize/save data
         print(

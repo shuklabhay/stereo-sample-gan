@@ -17,11 +17,21 @@ model_selection = ModelType.SNARE
 
 @dataclass
 class ModelParams:
+    # Model params
     DEVICE = "cuda:7"
     LATENT_DIM = 128
-    BATCH_SIZE = 64
-    DROPOUT_RATE = 0.2
+    BATCH_SIZE = 128
+    DROPOUT_RATE = 0.1
 
+    # Training
+    CRITIC_STEPS = 5
+    LR_G = 1e-4
+    LR_C = 2e-4
+    LR_DECAY = 0.99
+    LAMBDA_GP = 10
+    N_EPOCHS = 25
+
+    # Model specific params
     def __init__(self):
         self.load_params()
 
@@ -54,23 +64,6 @@ class ModelParams:
         self.training_audio_dir = selected_model["train_data_dir"]
 
 
-@dataclass
-class TrainingParams:
-    CRITIC_STEPS = 5
-    LR_G = 5e-5
-    LR_C = 5e-5
-    LAMBDA_GP = 10
-    N_EPOCHS = 20
-
-    @property
-    def SHOW_GENERATED_INTERVAL(self) -> int:
-        return int(self.N_EPOCHS / 4)
-
-    @property
-    def SAVE_INTERVAL(self) -> int:
-        return int(self.N_EPOCHS / 1)
-
-
 class SignalConstants:
     # Signal data dimensions
     SR = 44100
@@ -88,8 +81,8 @@ class SignalConstants:
         return int(self.SR / 2)
 
     @property
-    def WINDOW(self) -> NDArray[np.float64]:
-        return hann(self.FT_WIN)
+    def WINDOW(self) -> NDArray[np.float32]:
+        return hann(self.FT_WIN).astype(np.float32)
 
     @property
     def FT_WIN(self) -> int:

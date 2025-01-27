@@ -9,6 +9,7 @@ from utils.helpers import ModelParams, SignalConstants
 class ResizeConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, scale_factor=2):
         super(ResizeConvBlock, self).__init__()
+        num_groups = min(8, out_channels)
 
         layers = [
             nn.Upsample(scale_factor=scale_factor, mode="bicubic", align_corners=True),
@@ -17,7 +18,7 @@ class ResizeConvBlock(nn.Module):
 
         layers.extend(
             [
-                nn.BatchNorm2d(out_channels),
+                nn.GroupNorm(num_groups, out_channels),
                 nn.LeakyReLU(0.2),
                 nn.Dropout(ModelParams.DROPOUT_RATE),
             ]
@@ -39,14 +40,13 @@ class Generator(nn.Module):
             self.preconv_channels * self.preconv_size * self.preconv_size
         )
 
+        # Model progression
         self.initial = nn.Sequential(
             nn.Linear(ModelParams.LATENT_DIM, self.initial_features),
             nn.BatchNorm1d(self.initial_features),
             nn.LeakyReLU(0.2),
             nn.Dropout(ModelParams.DROPOUT_RATE),
         )
-
-        # Resize convolution blocks
         self.resize_blocks = nn.Sequential(
             ResizeConvBlock(self.preconv_channels, 64),  # 4x4 -> 8x8
             ResizeConvBlock(64, 32),  # 8x8 -> 16x16
@@ -57,29 +57,22 @@ class Generator(nn.Module):
                 8, SignalConstants.CHANNELS, scale_factor=2
             ),  # 128x128 -> 256x256
         )
-
-        self.htan = nn.Tanh()
+        self.tanh = nn.Tanh()
 
     def forward(self, z):
-        batch_size = z.size(0)
+        # Ensure input shape
+        x = z.view(ModelParams.BATCH_SIZE, -1)
 
-        # Reshape input: Ensure z is properly flattened
-        x = z.view(batch_size, -1)
-
-        # Pass through initial dense layer
+        # Pass through model layers
         x = self.initial(x)
-
-        # Reshape for convolution
         x = x.view(
-            batch_size,
+            ModelParams.BATCH_SIZE,
             self.preconv_channels,
             self.preconv_size,
             self.preconv_size,
         )
-
-        # Pass through resize blocks
         x = self.resize_blocks(x)
-        x = self.htan(x)
+        x = self.tanh(x)
         return x
 
 
@@ -126,24 +119,24 @@ class Critic(nn.Module):
             nn.Dropout(ModelParams.DROPOUT_RATE),
             spectral_norm(nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
-            nn.BatchNorm2d(8),
+            nn.GroupNorm(4, 8),
             nn.Dropout(ModelParams.DROPOUT_RATE),
             spectral_norm(nn.Conv2d(8, 16, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
-            nn.BatchNorm2d(16),
+            nn.GroupNorm(4, 16),
             nn.Dropout(ModelParams.DROPOUT_RATE),
             LinearAttention(16),
             spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
-            nn.BatchNorm2d(32),
+            nn.GroupNorm(8, 32),
             nn.Dropout(ModelParams.DROPOUT_RATE),
             spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
-            nn.BatchNorm2d(64),
+            nn.GroupNorm(8, 64),
             nn.Dropout(ModelParams.DROPOUT_RATE),
             spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
-            nn.BatchNorm2d(128),
+            nn.GroupNorm(16, 128),
             nn.Dropout(ModelParams.DROPOUT_RATE),
             spectral_norm(nn.Conv2d(128, 1, kernel_size=4, stride=1, padding=0)),
             nn.Flatten(),
@@ -163,4 +156,5 @@ class Critic(nn.Module):
         return features
 
     def forward(self, x):
-        return self.conv_blocks(x)
+        x = self.conv_blocks(x)
+        return x

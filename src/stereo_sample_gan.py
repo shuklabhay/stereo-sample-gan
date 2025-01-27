@@ -1,10 +1,9 @@
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from train import training_loop
-from utils.helpers import ModelParams, ModelUtils, SignalProcessing, TrainingParams
+from utils.helpers import ModelParams, ModelUtils, SignalProcessing
 
 # Load params
 model_params = ModelParams()
-training_params = TrainingParams()
 model_utils = ModelUtils(model_params.sample_length)
 signal_processing = SignalProcessing(model_params.sample_length)
 
