@@ -25,8 +25,8 @@ class ModelParams:
 
     # Training
     CRITIC_STEPS = 5
-    LR_G = 1e-4
-    LR_C = 2e-4
+    LR_G = 3e-4
+    LR_C = 4e-4
     LR_DECAY = 0.99
     LAMBDA_GP = 10
     N_EPOCHS = 25

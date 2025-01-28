@@ -20,51 +20,48 @@ signal_processing = SignalProcessing(model_params.sample_length)
 
 
 def calculate_fad(real_specs: torch.Tensor, generated_specs: torch.Tensor) -> float:
-    """Calculate Fréchet Audio Distance."""
+    """Calculate Fréchet Audio Distance using manual implementation."""
     # Set up model
     vggish = torchvggish.vggish().eval().to(model_params.DEVICE)
-    if hasattr(vggish, "pproc"):
-        vggish.pproc._pca_matrix = vggish.pproc._pca_matrix.to(model_params.DEVICE)
-        vggish.pproc._pca_means = vggish.pproc._pca_means.to(model_params.DEVICE)
+    vggish.pproc._pca_matrix = vggish.pproc._pca_matrix.to(model_params.DEVICE)
+    vggish.pproc._pca_means = vggish.pproc._pca_means.to(model_params.DEVICE)
 
     # Preprocess audio
     real_specs = torch.tensor(
-        DataUtils.scale_data_to_range(real_specs.detach().cpu().numpy(), 0, 1),
+        DataUtils.scale_data_to_range(real_specs.detach().cpu().numpy(), -40, 40),
         device=model_params.DEVICE,
     )
     real_specs = F.interpolate(
         real_specs.mean(dim=1, keepdim=True),
         size=(96, 64),
         mode="bilinear",
-        align_corners=False,
     )
     generated_specs = torch.tensor(
-        DataUtils.scale_data_to_range(generated_specs.detach().cpu().numpy(), 0, 1),
+        DataUtils.scale_data_to_range(generated_specs.detach().cpu().numpy(), -40, 40),
         device=model_params.DEVICE,
     )
     generated_specs = F.interpolate(
         generated_specs.mean(dim=1, keepdim=True),
         size=(96, 64),
         mode="bilinear",
-        align_corners=False,
     )
 
     # Extract VGGish features
     with torch.no_grad():
         real_specs = real_specs.to(model_params.DEVICE)
         generated_specs = generated_specs.to(model_params.DEVICE)
-
         real_feats = vggish(real_specs)
         generated_feats = vggish(generated_specs)
-
         real_feats = real_feats.to(model_params.DEVICE)
         generated_feats = generated_feats.to(model_params.DEVICE)
 
-    # Calculate FAD
-    mu_real, sigma_real = real_feats.mean(0), torch.cov(real_feats.T)
-    mu_generated, sigma_generated = generated_feats.mean(0), torch.cov(
-        generated_feats.T
-    )
+    # Calculate features
+    mu_real = real_feats.mean(0)
+    sigma_real = torch.cov(real_feats.T)
+    mu_generated = generated_feats.mean(0)
+    sigma_generated = torch.cov(generated_feats.T)
+
+    # Total FAD
     fad = torchaudio.functional.frechet_distance(
         mu_real, sigma_real, mu_generated, sigma_generated
     )

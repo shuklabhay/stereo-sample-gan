@@ -70,7 +70,7 @@ class DataUtils:
         # Extract audio
         samples = generated_items[:items_to_visualize].detach().cpu().numpy().squeeze()
         samples = np.mean(samples, axis=1)
-        color_min, color_max = 0, 1
+        color_min, color_max = -1, 1
 
         # Create figure with 4x4 grid
         fig, axes = plt.subplots(4, 4, figsize=(16, 9))
