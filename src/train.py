@@ -1,14 +1,13 @@
 from typing import Tuple
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 import torchaudio
-import torchvggish
 from architecture import Critic, Generator
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.optim.rmsprop import RMSprop
 from torch.utils.data import DataLoader
+from torchaudio.prototype.pipelines import VGGISH
 from tqdm import tqdm
 from utils.constants import model_selection
 from utils.helpers import DataUtils, ModelParams, ModelUtils, SignalProcessing
@@ -22,9 +21,7 @@ signal_processing = SignalProcessing(model_params.sample_length)
 def calculate_fad(real_specs: torch.Tensor, generated_specs: torch.Tensor) -> float:
     """Calculate Fréchet Audio Distance using manual implementation."""
     # Set up model
-    vggish = torchvggish.vggish().eval().to(model_params.DEVICE)
-    vggish.pproc._pca_matrix = vggish.pproc._pca_matrix.to(model_params.DEVICE)
-    vggish.pproc._pca_means = vggish.pproc._pca_means.to(model_params.DEVICE)
+    vggish = VGGISH.get_model().to(model_params.DEVICE)
 
     # Preprocess audio
     real_specs = torch.tensor(
@@ -48,12 +45,8 @@ def calculate_fad(real_specs: torch.Tensor, generated_specs: torch.Tensor) -> fl
 
     # Extract VGGish features
     with torch.no_grad():
-        real_specs = real_specs.to(model_params.DEVICE)
-        generated_specs = generated_specs.to(model_params.DEVICE)
         real_feats = vggish(real_specs)
         generated_feats = vggish(generated_specs)
-        real_feats = real_feats.to(model_params.DEVICE)
-        generated_feats = generated_feats.to(model_params.DEVICE)
 
     # Calculate features
     mu_real = real_feats.mean(0)
