@@ -26,11 +26,11 @@ class ModelParams:
 
     # Training
     CRITIC_STEPS = 5
-    LR_G = 3e-4
-    LR_C = 4e-4
+    LR_G = 3e-3
+    LR_C = 4e-3
     LR_DECAY = 0.99
     LAMBDA_GP = 10
-    N_EPOCHS = 25
+    N_EPOCHS = 35
 
     # Model specific params
     def __init__(self):

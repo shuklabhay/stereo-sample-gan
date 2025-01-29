@@ -14,7 +14,7 @@ signal_processing.encode_sample_directory(
     model_params.training_audio_dir, model_params.compiled_data_path
 )
 
-real_data = DataUtils.load_loudness_data(
+real_data = DataUtils.load_norm_specs(
     model_params.compiled_data_path
 )  # datapts, channels, frames, freq bins
 print(f"{model_params.training_audio_dir} data shape: {str(real_data.shape)}")

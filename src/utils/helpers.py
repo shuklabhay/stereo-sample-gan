@@ -16,14 +16,14 @@ from .constants import ModelParams, SignalConstants
 
 class DataUtils:
     @staticmethod
-    def save_loudness_data(
+    def save_norm_spec(
         file_path: str, loudness_information: NDArray[np.float32]
     ) -> None:
         """Save normalized loudness data array."""
         np.save(file_path, loudness_information)
 
     @staticmethod
-    def load_loudness_data(file_path: str) -> NDArray[np.float32]:
+    def load_norm_specs(file_path: str) -> NDArray[np.float32]:
         """Load normalized loudness data array."""
         return np.load(file_path, allow_pickle=True)
 
@@ -270,14 +270,14 @@ class SignalProcessing:
                 norm="slaney",
                 power=2.0,
             )
-            mel_db_spec = librosa.power_to_db(mel_spec, ref=np.max, top_db=80.0)
+            mel_db_spec = librosa.power_to_db(mel_spec.T, ref=np.max, top_db=80.0)
             mel_db_spec = mel_db_spec[
                 : self.constants.FRAMES, : self.constants.MEL_SPEC_FBINS
             ]
 
             # Normalize
             norm_mel_spec = DataUtils.scale_data_to_range(mel_db_spec, -1, 1)
-            stereo_norm_mel_spec.append(norm_mel_spec.T)  # (frames, mel_bins)
+            stereo_norm_mel_spec.append(norm_mel_spec)  # (frames, mel_bins)
 
         return np.array(stereo_norm_mel_spec)
 
@@ -288,7 +288,7 @@ class SignalProcessing:
         stereo_audio = []
         for norm_mel_spec in stereo_norm_mel_spec:
             norm_mel_spec = norm_mel_spec.T  # (mel_bins, frames)
-            db_mel_spec = DataUtils.scale_data_to_range(norm_mel_spec, -40, 40)
+            db_mel_spec = DataUtils.scale_data_to_range(norm_mel_spec, -80, 0)
             power_mel_spec = librosa.db_to_power(db_mel_spec)
             linear_spec = librosa.feature.inverse.mel_to_stft(
                 M=power_mel_spec,
@@ -307,7 +307,9 @@ class SignalProcessing:
             )
             stereo_audio.append(audio)
 
-        return librosa.util.normalize(np.array(stereo_audio), axis=1)
+        audio_final = librosa.util.normalize(np.array(stereo_audio), axis=1)
+        audio_final = self.fade_out_stereo_audio(audio_final)
+        return audio_final
 
     def encode_sample_directory(
         self, sample_dir: str, selected_model: str, output_dir: str = None
@@ -330,11 +332,12 @@ class SignalProcessing:
                     print("Remove sample and regenerate training data to continue.")
                     break
 
-                loudness_data = self.audio_to_norm_spec(y)
-                real_data.append(loudness_data)
+                y = self.fade_out_stereo_audio(y)
+                norm_spec = self.audio_to_norm_spec(y)
+                real_data.append(norm_spec)
 
         if output_dir is not None:
-            DataUtils.save_loudness_data(output_dir, np.array(real_data))
+            DataUtils.save_norm_spec(output_dir, np.array(real_data))
 
         return torch.tensor(np.array(real_data))
 
@@ -368,3 +371,20 @@ class SignalProcessing:
         if visualize is True:
             DataUtils.graph_spectrogram(stft, "stft")
             DataUtils.graph_spectrogram(vis_istft, "post istft")
+
+    @staticmethod
+    def fade_out_stereo_audio(y: np.ndarray, n_fade: int = 15) -> np.ndarray:
+        """Apply n-sample fade-out to both channels"""
+        for channel in range(y.shape[0]):
+            # Get signal info
+            n_samples = y.shape[1]
+            fade_length = min(n_fade, n_samples)
+            if fade_length == 0:
+                continue
+
+            # Apply fade ramp
+            fade_ramp = np.linspace(1.0, 0.0, fade_length)
+            start_idx = n_samples - fade_length
+            y[channel, start_idx:] *= fade_ramp
+
+        return y
