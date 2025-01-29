@@ -236,15 +236,22 @@ class SignalProcessing:
         self.constants = SignalConstants(self.sample_length)
 
     def audio_to_norm_spec(
-        self, channel_info: NDArray[np.float32]
+        self, audio_info: NDArray[np.float32]
     ) -> NDArray[np.float32]:
         """Convert raw audio to normalized decibel data points."""
-        stereo_loudness_info = []
+        stereo_norm_mel_spec = []
 
-        for i in range(self.constants.CHANNELS):
+        # Pad or cut audio to idea length
+        required_length = (
+            self.constants.FT_WIN + (self.constants.FRAMES - 1) * self.constants.FT_HOP
+        )
+        audio_info = librosa.util.fix_length(audio_info, size=required_length, axis=-1)
+
+        # Process stereo sample
+        for channel in audio_info:
             # Compute mel db spectrogram
             stft = librosa.stft(
-                y=np.asarray(channel_info[i]),
+                y=np.asarray(channel),
                 n_fft=self.constants.FT_WIN,
                 hop_length=self.constants.FT_HOP,
                 win_length=self.constants.FT_WIN,
@@ -252,10 +259,8 @@ class SignalProcessing:
                 center=True,
                 pad_mode="reflect",
             )
-            power_spec = np.abs(stft) ** 2
-
             mel_spec = librosa.feature.melspectrogram(
-                S=power_spec,
+                S=np.abs(stft),
                 sr=self.constants.SR,
                 n_mels=self.constants.MEL_SPEC_FBINS,
                 n_fft=self.constants.FT_WIN,
@@ -263,178 +268,46 @@ class SignalProcessing:
                 fmax=self.constants.MEL_MAX_FREQ,
                 htk=True,
                 norm="slaney",
+                power=2.0,
             )
-            loudness_info = librosa.power_to_db(mel_spec.T, ref=np.max, top_db=80.0)
-            loudness_info = loudness_info[
+            mel_db_spec = librosa.power_to_db(mel_spec, ref=np.max, top_db=80.0)
+            mel_db_spec = mel_db_spec[
                 : self.constants.FRAMES, : self.constants.MEL_SPEC_FBINS
             ]
 
             # Normalize
-            norm_loudness_info = DataUtils.scale_data_to_range(loudness_info, -1, 1)
-            stereo_loudness_info.append(norm_loudness_info)
+            norm_mel_spec = DataUtils.scale_data_to_range(mel_db_spec, -1, 1)
+            stereo_norm_mel_spec.append(norm_mel_spec.T)  # (frames, mel_bins)
 
-        return np.array(stereo_loudness_info)
+        return np.array(stereo_norm_mel_spec)
 
     def norm_spec_to_audio(
-        self, loudness_info: NDArray[np.float32]
+        self, stereo_norm_mel_spec: NDArray[np.float32]
     ) -> NDArray[np.float32]:
         """Convert normalized decibel output to raw audio."""
         stereo_audio = []
-        for i in range(self.constants.CHANNELS):
-            data = DataUtils.scale_data_to_range(
-                loudness_info[i], -40, 40
-            )  # scale to db
-            power_spec = librosa.db_to_power(data) + 1e-10
-            linear_spec = self.mel_spec_to_linear_spec(power_spec)
-            istft = self.fast_griffin_lim_istft(linear_spec)
-            stereo_audio.append(istft)
-
-        return np.array(stereo_audio)
-
-    def mel_spec_to_linear_spec(
-        self, mel_spectrogram: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
-        """Reconstruct linear spectrogram from mel spectrogram."""
-        mel_basis = librosa.filters.mel(
-            sr=self.constants.SR,
-            n_fft=self.constants.FT_WIN,
-            n_mels=self.constants.MEL_SPEC_FBINS,
-            fmin=self.constants.MEL_MIN_FREQ,
-            fmax=self.constants.MEL_MAX_FREQ,
-            htk=True,
-            norm="slaney",
-        )
-
-        # Convert to linear spec
-        mel_basis_reg = mel_basis @ mel_basis.T + 1e-4 * np.eye(mel_basis.shape[0])
-        inv_mel_basis_reg = np.linalg.inv(mel_basis_reg).astype(np.float32)
-        mel_pseudo = mel_basis.T @ inv_mel_basis_reg
-        linear_spectrogram = (mel_pseudo @ mel_spectrogram.T).astype(np.float32)
-
-        # Calc params for frequency-dependent smoothing
-        freqs = librosa.fft_frequencies(
-            sr=self.constants.SR, n_fft=self.constants.FT_WIN
-        )[: self.constants.LINEAR_SPEC_FBINS]
-        smoothing_windows = []
-        for freq in freqs:
-            # Wider windows for problematic frequency ranges
-            window_size = 9 if 800 <= freq <= 1200 else 5
-            window = np.hanning(window_size)
-            smoothing_windows.append(window / window.sum())
-
-        # Apply smoothing on frequency-dependent windows
-        linear_spectrogram_smooth = np.zeros_like(linear_spectrogram, dtype=np.float32)
-        for i in range(linear_spectrogram.shape[0]):
-            window = smoothing_windows[i]
-            pad_size = len(window) // 2
-            padded = np.pad(linear_spectrogram[i], pad_size, mode="edge")
-            linear_spectrogram_smooth[i] = np.convolve(padded, window, mode="valid")
-
-        # Frequency-dependent scaling
-        scaling_factors = np.ones(len(freqs), dtype=np.float32)
-        transition_region = (freqs >= 800) & (freqs <= 1200)
-        scaling_factors[transition_region] = 0.7
-        linear_spectrogram_smooth *= scaling_factors[:, np.newaxis]
-
-        # Get amplitude
-        linear_spectrogram_smooth = np.maximum(linear_spectrogram_smooth, 1e-10)
-        linear_amplitude_spectrogram = np.sqrt(linear_spectrogram_smooth)
-
-        return linear_amplitude_spectrogram.T
-
-    def fast_griffin_lim_istft(
-        self, linear_magnitudes: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
-        """Reconstruct audio from linear spectrogram."""
-        iterations = 16
-        momentum = 0.95
-        target_length = int(self.sample_length * self.constants.SR)
-        hop = target_length // self.constants.FRAMES
-
-        # Noise reduction
-        noise_thresh = 0.08
-        noise_memory = np.zeros_like(linear_magnitudes)
-        noise_dec_factor = 0.1
-
-        # Initialize angle from existing magnitudes
-        initial_complex = linear_magnitudes.astype(np.complex64)
-        y_init = librosa.istft(
-            initial_complex.T,
-            hop_length=hop,
-            win_length=self.constants.FT_WIN,
-            window=self.constants.WINDOW,
-            length=target_length,
-        )
-
-        stft_init = librosa.stft(
-            y_init,
-            n_fft=self.constants.FT_WIN,
-            hop_length=hop,
-            win_length=self.constants.FT_WIN,
-            window=self.constants.WINDOW,
-        )
-
-        angles = np.angle(
-            stft_init.T[: self.constants.FRAMES, : self.constants.LINEAR_SPEC_FBINS]
-        )
-        momentum_angles = angles.copy()
-
-        for i in range(iterations):
-            # Apply momentum
-            angles_update = angles + momentum * (angles - momentum_angles)
-            momentum_angles = angles.copy()
-
-            # Apply noise gate
-            gated_magnitudes = linear_magnitudes.copy()
-            noise_memory = np.maximum(
-                noise_memory * (1 - noise_dec_factor), gated_magnitudes
-            )
-            mask = (gated_magnitudes < noise_thresh) | (gated_magnitudes < noise_memory)
-            gated_magnitudes[mask] = gated_magnitudes.min()
-            stft = gated_magnitudes * np.exp(1j * angles_update)
-
-            # Forward and back pass
-            y = librosa.istft(
-                stft.T,
-                hop_length=hop,
-                win_length=self.constants.FT_WIN,
-                window=self.constants.WINDOW,
-                center=True,
-                length=target_length,
-            )
-
-            stft_full = librosa.stft(
-                y,
+        for norm_mel_spec in stereo_norm_mel_spec:
+            norm_mel_spec = norm_mel_spec.T  # (mel_bins, frames)
+            db_mel_spec = DataUtils.scale_data_to_range(norm_mel_spec, -40, 40)
+            power_mel_spec = librosa.db_to_power(db_mel_spec)
+            linear_spec = librosa.feature.inverse.mel_to_stft(
+                M=power_mel_spec,
+                sr=self.constants.SR,
                 n_fft=self.constants.FT_WIN,
-                hop_length=hop,
+                power=1.0,
+            )
+            audio = librosa.griffinlim(
+                S=linear_spec,
+                n_iter=100,
+                hop_length=self.constants.FT_HOP,
                 win_length=self.constants.FT_WIN,
                 window=self.constants.WINDOW,
-                center=True,
+                momentum=0.5,
+                init="random",
             )
+            stereo_audio.append(audio)
 
-            stft_trim = stft_full.T[
-                : self.constants.FRAMES, : self.constants.LINEAR_SPEC_FBINS
-            ]
-            angles = np.angle(stft_trim)
-
-        # Final reconstruction
-        y = librosa.istft(
-            stft.T,
-            hop_length=hop,
-            win_length=self.constants.FT_WIN,
-            window=self.constants.WINDOW,
-            center=True,
-            length=target_length,
-        )
-
-        # Slightly fade start and end
-        fade_length = 16
-        fade_in = np.linspace(0, 1, fade_length)
-        fade_out = np.linspace(1, 0, fade_length)
-        y[:fade_length] *= fade_in
-        y[-fade_length:] *= fade_out
-
-        return y
+        return librosa.util.normalize(np.array(stereo_audio), axis=1)
 
     def encode_sample_directory(
         self, sample_dir: str, selected_model: str, output_dir: str = None

@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 
+import librosa
 import numpy as np
 from numpy.typing import NDArray
 from scipy.signal.windows import hann
@@ -82,7 +83,7 @@ class SignalConstants:
 
     @property
     def WINDOW(self) -> NDArray[np.float32]:
-        return hann(self.FT_WIN).astype(np.float32)
+        return librosa.filters.get_window("hann", self.FT_WIN, fftbins=True)
 
     @property
     def FT_WIN(self) -> int:
@@ -90,4 +91,6 @@ class SignalConstants:
 
     @property
     def FT_HOP(self) -> int:
-        return int(self.sample_length * self.SR) // self.FRAMES
+        total_samples = int(self.sample_length * self.SR)
+        hop = (total_samples - self.FT_WIN) // (self.FRAMES - 1)
+        return hop
