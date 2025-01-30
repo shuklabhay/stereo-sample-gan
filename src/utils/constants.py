@@ -5,7 +5,6 @@ from enum import Enum
 import librosa
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal.windows import hann
 
 
 class ModelType(Enum):
@@ -21,16 +20,16 @@ class ModelParams:
     # Model params
     DEVICE = "cuda:7"
     LATENT_DIM = 128
-    BATCH_SIZE = 128
-    DROPOUT_RATE = 0.1
+    BATCH_SIZE = 64
+    DROPOUT_RATE = 0.15
 
-    # Training
+    # Training params
     CRITIC_STEPS = 5
-    LR_G = 3e-3
-    LR_C = 4e-3
+    LR_G = 2e-5
+    LR_C = 4e-5
     LR_DECAY = 0.99
     LAMBDA_GP = 10
-    N_EPOCHS = 35
+    N_EPOCHS = 25
 
     # Model specific params
     def __init__(self):

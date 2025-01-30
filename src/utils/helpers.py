@@ -197,7 +197,7 @@ class ModelUtils:
         self.load_model(model_save_path, ModelParams.DEVICE)
 
         # Generate audio
-        z = torch.randn(generation_count, ModelParams.LATENT_DIM, 1, 1)
+        z = torch.randn(generation_count, ModelParams.LATENT_DIM)
         with torch.no_grad():
             generated_output = self.generator(z).squeeze().numpy()
 

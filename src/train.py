@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import torchaudio
 from architecture import Critic, Generator
 from torch.optim.lr_scheduler import OneCycleLR
-from torch.optim.rmsprop import RMSprop
 from torch.utils.data import DataLoader
 from torchaudio.prototype.pipelines import VGGISH
 from tqdm import tqdm
@@ -25,7 +24,7 @@ def calculate_fad(real_specs: torch.Tensor, generated_specs: torch.Tensor) -> fl
 
     # Preprocess audio
     real_specs = torch.tensor(
-        DataUtils.scale_data_to_range(real_specs.detach().cpu().numpy(), -40, 40),
+        DataUtils.scale_data_to_range(real_specs.detach().cpu().numpy(), -1, 1),
         device=model_params.DEVICE,
     )
     real_specs = F.interpolate(
@@ -34,7 +33,7 @@ def calculate_fad(real_specs: torch.Tensor, generated_specs: torch.Tensor) -> fl
         mode="bilinear",
     )
     generated_specs = torch.tensor(
-        DataUtils.scale_data_to_range(generated_specs.detach().cpu().numpy(), -40, 40),
+        DataUtils.scale_data_to_range(generated_specs.detach().cpu().numpy(), -1, 1),
         device=model_params.DEVICE,
     )
     generated_specs = F.interpolate(
@@ -61,19 +60,13 @@ def calculate_fad(real_specs: torch.Tensor, generated_specs: torch.Tensor) -> fl
     return fad.item()
 
 
-def compute_g_loss(
-    critic: Critic,
-    generated_validity: torch.Tensor,
-    generated_spec: torch.Tensor,
-    real_spec: torch.Tensor,
-) -> torch.Tensor:
-    """Calculate generator loss."""
-    wasserstein_dist = -torch.mean(generated_validity)
-    feat_match = 0.2 * calculate_feature_match_diff(critic, real_spec, generated_spec)
-    freq_loss = 0.3 * frequency_band_loss(generated_spec, real_spec)
-
-    computed_g_loss = wasserstein_dist + feat_match + freq_loss
-    return computed_g_loss
+def compute_g_loss(critic, generated_validity, generated_specs, real_specs):
+    # Loss metrics
+    adversarial_loss = -torch.mean(generated_validity)
+    feat_match = 0.6 * calculate_feature_match_diff(critic, real_specs, generated_specs)
+    freq_loss = 0.5 * frequency_band_loss(generated_specs, real_specs)
+    # silence_loss = 0.5 * torch.mean(torch.abs(generated_specs[real_specs < -0.5] + 1.0))
+    return adversarial_loss + feat_match + freq_loss  # + silence_loss
 
 
 def compute_c_loss(
@@ -86,12 +79,12 @@ def compute_c_loss(
 ) -> torch.Tensor:
     """Calculate critic loss."""
     wasserstein_dist = calculate_wasserstein_diff(real_validity, generated_validity)
-    # spectral_diff = 0.15 * calculate_spectral_diff(real_spec, generated_spec)
-    # spectral_convergence = 0.15 * calculate_spectral_convergence_diff(
-    #     real_spec, generated_spec
-    # )
+    spectral_diff = 0.3 * calculate_spectral_diff(real_spec, generated_spec)
+    spectral_convergence = 0.3 * calculate_spectral_convergence_diff(
+        real_spec, generated_spec
+    )
 
-    computed_c_loss = wasserstein_dist  # + spectral_diff + spectral_convergence
+    computed_c_loss = wasserstein_dist + spectral_diff + spectral_convergence
 
     if training:
         gradient_penalty = calculate_gradient_penalty(critic, real_spec, generated_spec)
@@ -104,7 +97,7 @@ def calculate_wasserstein_diff(
     real_validity: torch.Tensor, generated_validity: torch.Tensor
 ) -> torch.Tensor:
     """Calculate wasserstien loss metric."""
-    return -(torch.mean(real_validity) - torch.mean(generated_validity))
+    return torch.mean(generated_validity) - torch.mean(real_validity)
 
 
 def calculate_feature_match_diff(
@@ -156,26 +149,29 @@ def calculate_gradient_penalty(
     real_samples: torch.Tensor,
     generated_samples: torch.Tensor,
 ) -> torch.Tensor:
-    """Calculate gradient penalty loss metric."""
-    # Create interpolates
-    alpha = torch.rand(real_samples.size(0), 1, 1, 1).to(model_params.DEVICE)
-    interpolates = (
-        alpha * real_samples + (1 - alpha) * generated_samples
-    ).requires_grad_(True)
-    c_interpolates = critic(interpolates)
-    generated = torch.ones(real_samples.size(0), 1).to(model_params.DEVICE)
+    """Calculate gradient penalty for WGAN-GP."""
+    batch_size = real_samples.size(0)
+    alpha = torch.rand(batch_size, 1, 1, 1).to(model_params.DEVICE)
 
-    # Calculate gradients
+    # Interpolate between real and generated samples
+    interpolates = (
+        real_samples * alpha + generated_samples * (1 - alpha)
+    ).requires_grad_(True)
+
+    # Compute gradients
+    c_interpolates = critic(interpolates)
     gradients = torch.autograd.grad(
         outputs=c_interpolates,
         inputs=interpolates,
-        grad_outputs=generated,
+        grad_outputs=torch.ones_like(c_interpolates),
         create_graph=True,
         retain_graph=True,
-        only_inputs=True,
     )[0]
-    gradients = gradients.view(gradients.size(0), -1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+
+    gradients = gradients.view(batch_size, -1)
+    gradient_norm = gradients.norm(2, dim=1)
+    gradient_penalty = ((gradient_norm - 1) ** 2).mean()
+
     return gradient_penalty
 
 
@@ -183,8 +179,8 @@ def train_epoch(
     generator: Generator,
     critic: Critic,
     dataloader: DataLoader,
-    optimizer_G: RMSprop,
-    optimizer_C: RMSprop,
+    optimizer_G: torch.optim.Adam,
+    optimizer_C: torch.optim.Adam,
     scheduler_G: OneCycleLR,
     scheduler_C: OneCycleLR,
     epoch_number: int,
@@ -199,13 +195,13 @@ def train_epoch(
         total=len(dataloader),
         desc=f"Train Epoch {epoch_number+1}",
     ):
-        real_spec = real_spec.to(model_params.DEVICE)
-
         # Train critic
+        real_spec = real_spec.to(model_params.DEVICE)
         optimizer_C.zero_grad()
-        z = torch.randn(model_params.BATCH_SIZE, model_params.LATENT_DIM, 1, 1).to(
+        z = torch.randn(model_params.BATCH_SIZE, model_params.LATENT_DIM).to(
             model_params.DEVICE
         )
+
         generated_spec = generator(z)
         combined_data = torch.cat([real_spec, generated_spec.detach()], dim=0)
 
@@ -235,7 +231,7 @@ def train_epoch(
         # Train generator every CRITIC_STEPS steps
         if i % model_params.CRITIC_STEPS == 0:
             optimizer_G.zero_grad()
-            z = torch.randn(model_params.BATCH_SIZE, model_params.LATENT_DIM, 1, 1).to(
+            z = torch.randn(model_params.BATCH_SIZE, model_params.LATENT_DIM).to(
                 model_params.DEVICE
             )
             generated_spec = generator(z)
@@ -283,7 +279,7 @@ def validate(
             disable=True,
         ):
             real_spec = real_spec.to(model_params.DEVICE)
-            z = torch.randn(model_params.BATCH_SIZE, model_params.LATENT_DIM, 1, 1).to(
+            z = torch.randn(model_params.BATCH_SIZE, model_params.LATENT_DIM).to(
                 model_params.DEVICE
             )
             generated_spec = generator(z)
@@ -331,16 +327,18 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     # Prepare model optimizer and scheduler
     generator = Generator()
     critic = Critic()
-    optimizer_G = RMSprop(
-        generator.parameters(), lr=model_params.LR_G, weight_decay=0.05
+    optimizer_G = torch.optim.Adam(
+        generator.parameters(), lr=model_params.LR_G, betas=(0.5, 0.999)
     )
-    optimizer_C = RMSprop(critic.parameters(), lr=model_params.LR_C, weight_decay=0.05)
+    optimizer_C = torch.optim.Adam(
+        generator.parameters(), lr=model_params.LR_C, betas=(0.5, 0.999)
+    )
     scheduler_G = OneCycleLR(
         optimizer_G,
         max_lr=model_params.LR_G,
         total_steps=len(train_loader) * model_params.N_EPOCHS,
         pct_start=0.2,
-        div_factor=25,
+        div_factor=35,
         final_div_factor=1e4,
     )
     scheduler_C = OneCycleLR(
@@ -348,7 +346,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         max_lr=model_params.LR_C,
         total_steps=len(train_loader) * model_params.N_EPOCHS,
         pct_start=0.2,
-        div_factor=25,
+        div_factor=35,
         final_div_factor=1e4,
     )
     generator.to(model_params.DEVICE)
@@ -357,7 +355,6 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     best_fad = float("inf")
     epochs_no_improve = 0
     patience = 10
-    warmup = 5
 
     for epoch in range(model_params.N_EPOCHS):
         # Train
@@ -383,6 +380,9 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             f"VAL w_dist: {val_w_dist:.4f} g_loss: {val_g_loss:.4f} c_loss: {val_c_loss:.4f}"
         )
         print(f"FAD {current_fad:.4f}")
+        print(
+            f"Generated: [{val_audio_items.cpu().min():.4f}, {val_audio_items.cpu().max():.4f}]"
+        )
 
         # End of epoch handling
         DataUtils.visualize_spectrogram_grid(

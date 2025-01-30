@@ -13,7 +13,7 @@ all_spectrograms = signal_processing.encode_sample_directory(
 )
 
 # Create train and val datasets
-train_size = int(0.8 * len(all_spectrograms))
+train_size = int(0.9 * len(all_spectrograms))
 val_size = len(all_spectrograms) - train_size
 train_dataset, val_dataset = random_split(
     TensorDataset(all_spectrograms), [train_size, val_size]
