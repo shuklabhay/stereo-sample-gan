@@ -2,15 +2,14 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 
+import librosa
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal.windows import hann
 
 
 class ModelType(Enum):
     KICKDRUM = "Kickdrum"
     SNARE = "Snare"
-    CHORDSHOT = "ChordShot"
 
 
 model_selection = ModelType.SNARE
@@ -18,10 +17,20 @@ model_selection = ModelType.SNARE
 
 @dataclass
 class ModelParams:
+    # Model params
+    DEVICE = "cuda:7"
     LATENT_DIM = 128
-    BATCH_SIZE = 16
-    DROPOUT_RATE = 0.2
+    BATCH_SIZE = 64
+    DROPOUT_RATE = 0.1
 
+    # Training params
+    CRITIC_STEPS = 5
+    LR_G = 3e-4
+    LR_C = 6e-4
+    LAMBDA_GP = 10
+    N_EPOCHS = 25
+
+    # Model specific params
     def __init__(self):
         self.load_params()
 
@@ -54,24 +63,6 @@ class ModelParams:
         self.training_audio_dir = selected_model["train_data_dir"]
 
 
-@dataclass
-class TrainingParams:
-    LR_G = 0.003
-    LR_C = 0.004
-    LR_DECAY = 0.9
-    LAMBDA_GP = 5
-    CRITIC_STEPS = 5
-    N_EPOCHS = 20
-
-    @property
-    def SHOW_GENERATED_INTERVAL(self) -> int:
-        return int(self.N_EPOCHS / 4)
-
-    @property
-    def SAVE_INTERVAL(self) -> int:
-        return int(self.N_EPOCHS / 1)
-
-
 class SignalConstants:
     # Signal data dimensions
     SR = 44100
@@ -89,8 +80,8 @@ class SignalConstants:
         return int(self.SR / 2)
 
     @property
-    def WINDOW(self) -> NDArray[np.float64]:
-        return hann(self.FT_WIN)
+    def WINDOW(self) -> NDArray[np.float32]:
+        return librosa.filters.get_window("hann", self.FT_WIN, fftbins=True)
 
     @property
     def FT_WIN(self) -> int:
@@ -98,4 +89,6 @@ class SignalConstants:
 
     @property
     def FT_HOP(self) -> int:
-        return int(self.sample_length * self.SR) // self.FRAMES
+        total_samples = int(self.sample_length * self.SR)
+        hop = (total_samples - self.FT_WIN) // (self.FRAMES - 1)
+        return hop

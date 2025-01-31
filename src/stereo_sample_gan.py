@@ -1,44 +1,38 @@
-import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
-
 from train import training_loop
-from utils.helpers import (
-    DataUtils,
-    ModelParams,
-    ModelUtils,
-    SignalProcessing,
-    TrainingParams,
-)
+from utils.helpers import ModelParams, ModelUtils, SignalProcessing
 
 # Load params
 model_params = ModelParams()
-training_params = TrainingParams()
 model_utils = ModelUtils(model_params.sample_length)
 signal_processing = SignalProcessing(model_params.sample_length)
 
-# Load data
-print("Encoding audio data for", model_params.selected_model)
-signal_processing.encode_sample_directory(
-    model_params.training_audio_dir, model_params.compiled_data_path, False
+# Encode data from directory
+all_spectrograms = signal_processing.encode_sample_directory(
+    model_params.training_audio_dir, model_params.selected_model
 )
 
-
-all_spectrograms = DataUtils.load_loudness_data(model_params.compiled_data_path)
-all_spectrograms = torch.FloatTensor(all_spectrograms)
-print("Data encoded:", all_spectrograms.shape)
-
-train_size = int(0.8 * len(all_spectrograms))
+# Create train and val datasets
+train_size = int(0.9 * len(all_spectrograms))
 val_size = len(all_spectrograms) - train_size
 train_dataset, val_dataset = random_split(
     TensorDataset(all_spectrograms), [train_size, val_size]
 )
 
+# Create dataloaders
 train_loader = DataLoader(
-    train_dataset, batch_size=model_params.BATCH_SIZE, shuffle=True
+    train_dataset,
+    num_workers=16,
+    batch_size=model_params.BATCH_SIZE,
+    drop_last=True,
 )
-val_loader = DataLoader(val_dataset, batch_size=model_params.BATCH_SIZE, shuffle=False)
+val_loader = DataLoader(
+    val_dataset,
+    num_workers=16,
+    batch_size=model_params.BATCH_SIZE,
+    drop_last=True,
+)
 
 
-# Train
-print("Starting training for", model_params.selected_model)
+# Train model
 training_loop(train_loader, val_loader)
