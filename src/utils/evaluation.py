@@ -13,9 +13,7 @@ def calculate_audio_metrics(
     """Calculate FAD, IS, and KID."""
     model_params = ModelParams()
     fad_value = calculate_fad(model_params, real_specs, generated_specs)
-    inception_dist = calculate_inception_score(
-        model_params, real_specs, generated_specs
-    )
+    inception_dist = calculate_inception_score(model_params, generated_specs)
     kis_value = calculate_kernel_inception_distance(
         model_params, real_specs, generated_specs
     )

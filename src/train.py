@@ -143,12 +143,14 @@ def train_epoch(
     optimizer_G: torch.optim.Adam,
     optimizer_C: torch.optim.Adam,
     epoch_number: int,
-) -> dict[str, float]:
+) -> dict[str, int | float]:
     """Training."""
+    # Prepare loop
     generator.train()
     critic.train()
     total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
 
+    # Loop
     for i, (real_spec,) in tqdm(
         enumerate(dataloader),
         total=len(dataloader),
@@ -209,7 +211,12 @@ def train_epoch(
     avg_c_loss = total_c_loss / len(dataloader)
     avg_w_dist = total_w_dist / len(dataloader)
 
-    return {"g_loss": avg_g_loss, "c_loss": avg_c_loss, "w_dist": avg_w_dist}
+    return {
+        "epoch": epoch_number,
+        "g_loss": avg_g_loss,
+        "c_loss": avg_c_loss,
+        "w_dist": avg_w_dist,
+    }
 
 
 def validate(
@@ -217,18 +224,13 @@ def validate(
     critic: Critic,
     dataloader: DataLoader,
     epoch_number: int,
-) -> dict[str, float | torch.Tensor]:
-    """Validation returning G loss, C loss, W-dist, FAD, Inception, KIS, and a sample."""
+) -> dict[str, int | float | torch.Tensor]:
+    """Validation loop."""
+    # Prepare loop
     generator.eval()
     critic.eval()
-
-    # Counters
-    total_g_loss = 0.0
-    total_c_loss = 0.0
-    total_w_dist = 0.0
-    total_fad = 0.0
-    total_is = 0.0
-    total_kid = 0.0
+    total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
+    total_fad, total_is, total_kid = 0.0, 0.0, 0.0
 
     # Val loop
     with torch.no_grad():
@@ -270,25 +272,22 @@ def validate(
             total_is += metrics["inception_score"]
             total_kid += metrics["kernel_inception_distance"]
 
-    return (
-        {
-            "g_loss": total_g_loss / len(dataloader),
-            "c_loss": total_c_loss / len(dataloader),
-            "w_dist": total_w_dist / len(dataloader),
-            "fad": total_fad / len(dataloader),
-            "is": total_is / len(dataloader),
-            "kid": total_kid / len(dataloader),
-            "val_specs": generated_spec.cpu(),
-        },
-    )
+    return {
+        "epoch": epoch_number,
+        "g_loss": total_g_loss / len(dataloader),
+        "c_loss": total_c_loss / len(dataloader),
+        "w_dist": total_w_dist / len(dataloader),
+        "fad": total_fad / len(dataloader),
+        "is": total_is / len(dataloader),
+        "kid": total_kid / len(dataloader),
+        "val_specs": generated_spec.cpu(),
+    }
 
 
 def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     """Training loop."""
-    # User feedback
+    # Prepare loop
     print("Starting training for", model_params.selected_model)
-
-    # Prepare model optimizer and scheduler
     generator = Generator()
     critic = Critic()
     optimizer_G = torch.optim.Adam(
@@ -363,4 +362,5 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
 
         if epochs_no_improve >= patience:
             print("Early stopping triggered")
+            break
             break
