@@ -79,6 +79,7 @@ threadpoolctl==3.5.0
 tinycss2==1.3.0
 torch==2.5.1
 torchaudio==2.5.1
+torchmetrics==1.6.1
 torchvggish==2.1.3
 tornado==6.4.1
 tqdm==4.66.5
