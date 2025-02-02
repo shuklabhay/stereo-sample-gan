@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import torch
 import torch.nn.functional as F
 from architecture import Critic, Generator
@@ -7,7 +5,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils.constants import model_selection
-from utils.evaluation import calculate_audio_metrics
+from utils.evaluation import calculate_audio_metrics, calculate_weighted_improvement
 from utils.helpers import DataUtils, ModelParams, ModelUtils, SignalProcessing
 
 # Initialize parameters
@@ -17,62 +15,14 @@ signal_processing = SignalProcessing(model_params.sample_length)
 
 
 def compute_g_loss(critic, generated_validity, generated_specs, real_specs):
-    # Loss metrics
+    # Base losses
     adversarial_loss = -torch.mean(generated_validity)
-    feat_match = 0.8 * calculate_feature_match_diff(critic, real_specs, generated_specs)
+    feat_match = calculate_feature_match_diff(critic, real_specs, generated_specs)
 
-    return adversarial_loss + feat_match  # + silence_loss
+    # Detail-preserving losses
+    detail_loss = calculate_detail_preservation_loss(real_specs, generated_specs)
 
-
-def compute_c_loss(
-    critic: Critic,
-    generated_validity: torch.Tensor,
-    real_validity: torch.Tensor,
-    generated_spec: torch.Tensor,
-    real_spec: torch.Tensor,
-    training: bool,
-) -> torch.Tensor:
-    """Calculate critic loss with additional multi-scale spectral reconstruction."""
-    # Wasserstein + spectral features
-    wasserstein_dist = calculate_wasserstein_diff(real_validity, generated_validity)
-    spectral_diff = 0.15 * calculate_spectral_diff(real_spec, generated_spec)
-    spectral_convergence = 0.15 * calculate_spectral_convergence_diff(
-        real_spec, generated_spec
-    )
-
-    # Multi-scale L1: downsample and compare at different scales
-    scales = [1, 0.5, 0.25]
-    multi_scale_loss = torch.zeros(1, device=real_spec.device)
-    for s in scales:
-        if s < 1.0:
-            size = (
-                int(real_spec.shape[2] * s),
-                int(real_spec.shape[3] * s),
-            )
-            real_down = F.interpolate(real_spec, size=size, mode="bilinear")
-            gen_down = F.interpolate(generated_spec, size=size, mode="bilinear")
-            multi_scale_loss += torch.mean(torch.abs(real_down - gen_down))
-
-    computed_c_loss = (
-        wasserstein_dist
-        + spectral_diff
-        + spectral_convergence
-        + 0.05 * multi_scale_loss
-    )
-
-    # Gradient penalty if training
-    if training:
-        gradient_penalty = calculate_gradient_penalty(critic, real_spec, generated_spec)
-        computed_c_loss += model_params.LAMBDA_GP * gradient_penalty
-
-    return computed_c_loss
-
-
-def calculate_wasserstein_diff(
-    real_validity: torch.Tensor, generated_validity: torch.Tensor
-) -> torch.Tensor:
-    """Calculate wasserstien loss metric."""
-    return torch.mean(generated_validity) - torch.mean(real_validity)
+    return adversarial_loss + 0.5 * feat_match + 0.2 * detail_loss
 
 
 def calculate_feature_match_diff(
@@ -89,6 +39,63 @@ def calculate_feature_match_diff(
     return loss / len(real_features)
 
 
+def calculate_detail_preservation_loss(
+    real_specs: torch.Tensor, generated_specs: torch.Tensor
+) -> torch.Tensor:
+    """Calculate loss focusing on preserving fine details using gradient differences."""
+    # Compute gradients in both x and y directions
+    real_grad_x = torch.abs(real_specs[:, :, :, 1:] - real_specs[:, :, :, :-1])
+    real_grad_y = torch.abs(real_specs[:, :, 1:, :] - real_specs[:, :, :-1, :])
+    gen_grad_x = torch.abs(generated_specs[:, :, :, 1:] - generated_specs[:, :, :, :-1])
+    gen_grad_y = torch.abs(generated_specs[:, :, 1:, :] - generated_specs[:, :, :-1, :])
+
+    # Compare gradient differences with higher weight on larger gradients
+    grad_diff_x = torch.mean(torch.abs(real_grad_x - gen_grad_x) * (1.0 + real_grad_x))
+    grad_diff_y = torch.mean(torch.abs(real_grad_y - gen_grad_y) * (1.0 + real_grad_y))
+
+    return grad_diff_x + grad_diff_y
+
+
+def compute_c_loss(
+    critic: Critic,
+    generated_validity: torch.Tensor,
+    real_validity: torch.Tensor,
+    generated_spec: torch.Tensor,
+    real_spec: torch.Tensor,
+    training: bool,
+) -> torch.Tensor:
+    """Calculate critic loss with improved spectral analysis."""
+    # Base loss
+    wasserstein_dist = calculate_wasserstein_diff(real_validity, generated_validity)
+
+    # Spectral differences
+    # spectral_diff = calculate_spectral_diff(real_spec, generated_spec)
+    # spectral_convergence = calculate_spectral_convergence_diff(
+    #     real_spec, generated_spec
+    # )
+    multi_scale_loss = calculate_multi_scale_loss(real_spec, generated_spec)
+
+    computed_c_loss = (
+        1.0 * wasserstein_dist
+        # + 0.3 * spectral_diff
+        # + 0.3 * spectral_convergence
+        + 0.15 * multi_scale_loss
+    )
+
+    if training:
+        gradient_penalty = calculate_gradient_penalty(critic, real_spec, generated_spec)
+        computed_c_loss += model_params.LAMBDA_GP * gradient_penalty
+
+    return computed_c_loss
+
+
+def calculate_wasserstein_diff(
+    real_validity: torch.Tensor, generated_validity: torch.Tensor
+) -> torch.Tensor:
+    """Calculate wasserstien loss metric."""
+    return torch.mean(generated_validity) - torch.mean(real_validity)
+
+
 def calculate_spectral_diff(
     real_spec: torch.Tensor, generated_spec: torch.Tensor
 ) -> torch.Tensor:
@@ -103,6 +110,27 @@ def calculate_spectral_convergence_diff(
     numerator = torch.norm(generated_spec - real_spec, p=2)
     denominator = torch.norm(real_spec, p=2) + 1e-8
     return numerator / denominator
+
+
+def calculate_multi_scale_loss(
+    real_spec: torch.Tensor, generated_spec: torch.Tensor
+) -> torch.Tensor:
+    """Calculate multi-scale analysis loss between real and generated spectrograms."""
+    scales = [1, 0.75, 0.5, 0.25, 0.125]
+    scale_weights = [1.0, 1.2, 1.5, 1.8, 2.0]
+    multi_scale_loss = torch.zeros(1, device=real_spec.device)
+
+    for s, weight in zip(scales, scale_weights):
+        if s < 1.0:
+            size = (
+                int(real_spec.shape[2] * s),
+                int(real_spec.shape[3] * s),
+            )
+            real_down = F.interpolate(real_spec, size=size, mode="bicubic")
+            gen_down = F.interpolate(generated_spec, size=size, mode="bicubic")
+            multi_scale_loss += weight * torch.mean(torch.abs(real_down - gen_down))
+
+    return multi_scale_loss
 
 
 def calculate_gradient_penalty(
@@ -269,8 +297,8 @@ def validate(
                 real_validity, generated_validity
             ).item()
             total_fad += metrics["fad"]
-            total_is += metrics["inception_score"]
-            total_kid += metrics["kernel_inception_distance"]
+            total_is += metrics["is"]
+            total_kid += metrics["kid"]
 
     return {
         "epoch": epoch_number,
@@ -301,7 +329,11 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     generator.to(model_params.DEVICE)
     critic.to(model_params.DEVICE)
 
-    best_fad = float("inf")
+    best_metrics = {
+        "fad": float("inf"),
+        "is": float("-inf"),
+        "kid": float("inf"),
+    }
     epochs_no_improve = 0
     patience = 10
 
@@ -319,42 +351,46 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         # Validate
         val_metrics = validate(generator, critic, val_loader, epoch)
 
-        # Step schedulers based on validation FAD
-        scheduler_G.step(val_metrics["fad"])
-        scheduler_C.step(val_metrics["fad"])
+        # Step schedulers using weighted metric sum
+        weighted_val_metric = calculate_weighted_improvement(val_metrics)
+        scheduler_G.step(weighted_val_metric)
+        scheduler_C.step(weighted_val_metric)
 
+        # Print information
         print(
-            f"TRAIN g_loss: {train_metrics["g_loss"]:.4f} c_loss: {train_metrics["c_loss"]:.4f} w_dist: {train_metrics["w_dist"]:.4f}"
+            f"TRAIN g_loss: {train_metrics['g_loss']:.4f} c_loss: {train_metrics['c_loss']:.4f} w_dist: {train_metrics['w_dist']:.4f}"
         )
         print(
-            f"VAL g_loss: {val_metrics["g_loss"]:.4f} c_loss: {val_metrics["c_loss"]:.4f} w_dist: {val_metrics["w_dist"]:.4f}"
+            f"VAL g_loss: {val_metrics['g_loss']:.4f} c_loss: {val_metrics['c_loss']:.4f} w_dist: {val_metrics['w_dist']:.4f}"
         )
         print(
-            f"VAL FAD: {val_metrics["fad"]:.4f} IS: {val_metrics["is"]:.4f} KIS: {val_metrics["kid"]:.4f}"
+            f"VAL FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}"
         )
         print(
-            f"Generated Range: [{val_metrics["val_specs"].min():.4f}, {val_metrics["val_specs"].max():.4f}]"
+            f"Generated Range: [{val_metrics['val_specs'].min():.4f}, {val_metrics['val_specs'].max():.4f}]"
         )
 
         # End of epoch handling
         DataUtils.visualize_spectrogram_grid(
             val_metrics["val_specs"],
-            f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics["w_dist"]:.4f} FAD: {val_metrics["fad"]:.4f} IS: {val_metrics["is"]:.4f} KIS: {val_metrics["kid"]:.4f}",
+            f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}",
             f"static/{model_selection.name.lower()}_progress_val_spectrograms.png",
         )
 
-        # Early exit
-        if val_metrics["fad"] < best_fad:
-            best_fad = val_metrics["fad"]
+        # Early exit checking all metrics
+        if val_metrics["fad"] < best_metrics["fad"]:
+            best_metrics["fad"] = val_metrics["fad"]
+            best_metrics["is"] = val_metrics["is"]
+            best_metrics["kid"] = val_metrics["kid"]
             epochs_no_improve = 0
             DataUtils.visualize_spectrogram_grid(
                 val_metrics["val_specs"],
-                f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics["w_dist"]:.4f} FAD: {val_metrics["fad"]:.4f} IS: {val_metrics["is"]:.4f} KIS: {val_metrics["kid"]:.4f}",
+                f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}",
                 f"static/{model_selection.name.lower()}_best_val_spectrograms.png",
             )
             model_utils.save_model(generator)
             print(
-                f"New best model saved at w_dist: {val_metrics["w_dist"]:.4f} FAD: {val_metrics["fad"]:.4f} IS: {val_metrics["is"]:.4f} KIS: {val_metrics["kid"]:.4f}"
+                f"New best model saved with metrics - FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f}"
             )
         else:
             epochs_no_improve += 1
@@ -362,5 +398,4 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
 
         if epochs_no_improve >= patience:
             print("Early stopping triggered")
-            break
             break

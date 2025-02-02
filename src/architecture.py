@@ -5,18 +5,6 @@ from torch.nn.utils import spectral_norm
 from utils.helpers import ModelParams, SignalConstants
 
 
-class MiniBatchStdDev(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        std = torch.std(x, dim=0, unbiased=False)
-        mean_std = torch.mean(std)
-        shape = [x.shape[0], 1, *x.shape[2:]]
-        mean_std = mean_std.expand(shape)
-        return torch.cat([x, mean_std], dim=1)
-
-
 class ResizeConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, spatial_size):
         super().__init__()
@@ -81,51 +69,51 @@ class Generator(nn.Module):
 class Critic(nn.Module):
     def __init__(self):
         super().__init__()
-
         self.conv_blocks = nn.Sequential(
-            spectral_norm(nn.Conv2d(SignalConstants.CHANNELS, 4, 4, 2, 1)),
+            spectral_norm(nn.Conv2d(SignalConstants.CHANNELS, 32, 4, 4, 1)),
             nn.LeakyReLU(0.2),
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            spectral_norm(nn.Conv2d(4, 8, 4, 2, 1)),
-            nn.LeakyReLU(0.2),
-            nn.LayerNorm([8, 64, 64]),
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            spectral_norm(nn.Conv2d(8, 16, 4, 2, 1)),
-            nn.LeakyReLU(0.2),
-            nn.LayerNorm([16, 32, 32]),
-            LinearAttention(16),
-            nn.Dropout(ModelParams.DROPOUT_RATE),
-            spectral_norm(nn.Conv2d(16, 32, 4, 2, 1)),
-            nn.LeakyReLU(0.2),
-            nn.LayerNorm([32, 16, 16]),
-            nn.Dropout(ModelParams.DROPOUT_RATE),
+            nn.InstanceNorm2d(32),
+            LinearAttention(32),
             spectral_norm(nn.Conv2d(32, 64, 4, 2, 1)),
             nn.LeakyReLU(0.2),
-            nn.LayerNorm([64, 8, 8]),
-            LinearAttention(64),
-            nn.Dropout(ModelParams.DROPOUT_RATE),
+            nn.InstanceNorm2d(64),
             spectral_norm(nn.Conv2d(64, 128, 4, 2, 1)),
             nn.LeakyReLU(0.2),
-            nn.LayerNorm([128, 4, 4]),
-            nn.Dropout(ModelParams.DROPOUT_RATE),
+            nn.InstanceNorm2d(128),
+            spectral_norm(nn.Conv2d(128, 256, 4, 2, 1)),
+            nn.LeakyReLU(0.2),
+            nn.InstanceNorm2d(256),
+            LinearAttention(256),
+            spectral_norm(nn.Conv2d(256, 512, 4, 2, 1)),
+            nn.LeakyReLU(0.2),
+            nn.InstanceNorm2d(512),
             MiniBatchStdDev(),
-            spectral_norm(nn.Conv2d(129, 1, 4, 1, 0)),
+            spectral_norm(nn.Conv2d(513, 1, 4, 1, 0)),
             nn.Flatten(),
         )
 
     def extract_features(self, x):
         features = []
-        for i, layer in enumerate(self.conv_blocks):
+        for layer in self.conv_blocks:
             x = layer(x)
-            if isinstance(layer, LinearAttention) or i in [
-                0,
-                len(self.conv_blocks) - 2,
-            ]:
+            if isinstance(layer, LinearAttention):
                 features.append(x)
         return features
 
     def forward(self, x):
         return self.conv_blocks(x)
+
+
+class MiniBatchStdDev(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        std = torch.std(x, dim=0, unbiased=False)
+        mean_std = torch.mean(std)
+        shape = [x.shape[0], 1, *x.shape[2:]]
+        mean_std = mean_std.expand(shape)
+        return torch.cat([x, mean_std], dim=1)
 
 
 class LinearAttention(nn.Module):

@@ -7,6 +7,26 @@ from torchmetrics.image.kid import KernelInceptionDistance
 from utils.helpers import DataUtils, ModelParams
 
 
+def calculate_weighted_improvement(metrics: dict) -> float:
+    """Calculate weighted combination of metrics for scheduler stepping."""
+    weights = {
+        "fad": 0.6,  # Audio feature
+        "is": 0.2,  # More reliable image feature
+        "kid": 0.2,  # Basic image feature
+    }
+
+    # Normalize IS
+    normalized_is = 1.0 / (metrics["is"] + 1e-8)
+
+    weighted_sum = (
+        weights["fad"] * metrics["fad"]
+        + weights["is"] * normalized_is
+        + weights["kid"] * metrics["kid"]
+    ) / 3
+
+    return weighted_sum
+
+
 def calculate_audio_metrics(
     real_specs: torch.Tensor, generated_specs: torch.Tensor
 ) -> dict:
@@ -14,14 +34,14 @@ def calculate_audio_metrics(
     model_params = ModelParams()
     fad_value = calculate_fad(model_params, real_specs, generated_specs)
     inception_dist = calculate_inception_score(model_params, generated_specs)
-    kis_value = calculate_kernel_inception_distance(
+    kid_value = calculate_kernel_inception_distance(
         model_params, real_specs, generated_specs
     )
 
     return {
         "fad": fad_value,
-        "inception_score": inception_dist,
-        "kernel_inception_distance": kis_value,
+        "is": inception_dist,
+        "kid": kid_value,
     }
 
 
@@ -99,9 +119,10 @@ def calculate_kernel_inception_distance(
     real_rgb = real_scaled.repeat(1, 3, 1, 1)
 
     # Calculate KID
-    kid = KernelInceptionDistance(subsets=100, subset_size=50, normalize=True).to(
-        model_params.DEVICE
-    )
+    subset_size = min(real_specs.shape[0], generated_specs.shape[0], 50)
+    kid = KernelInceptionDistance(
+        subsets=100, subset_size=subset_size, normalize=True
+    ).to(model_params.DEVICE)
     kid.update(real_rgb, real=True)
     kid.update(generated_rgb, real=False)
     kid_mean, _ = kid.compute()

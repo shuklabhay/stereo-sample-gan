@@ -20,15 +20,15 @@ class ModelParams:
     # Model params
     DEVICE = "cuda:7"
     LATENT_DIM = 128
-    BATCH_SIZE = 64
+    BATCH_SIZE = 16
     DROPOUT_RATE = 0.1
 
     # Training params
     CRITIC_STEPS = 5
-    LR_G = 3e-4
-    LR_C = 6e-4
+    LR_G = 2e-5
+    LR_C = 4e-5
     LAMBDA_GP = 10
-    N_EPOCHS = 25
+    N_EPOCHS = 35
 
     # Model specific params
     def __init__(self):
