@@ -19,10 +19,19 @@ def compute_g_loss(critic, generated_validity, generated_specs, real_specs):
     adversarial_loss = -torch.mean(generated_validity)
     feat_match = calculate_feature_match_diff(critic, real_specs, generated_specs)
 
-    # Detail-preserving losses
-    detail_loss = calculate_detail_preservation_loss(real_specs, generated_specs)
+    # New stereo-aware losses
+    stereo_coherence = calculate_stereo_coherence_loss(generated_specs)
+    multiscale_loss = calculate_multiscale_spectral_loss(real_specs, generated_specs)
 
-    return adversarial_loss + 0.5 * feat_match + 0.2 * detail_loss
+    # Combine losses with weights
+    total_loss = (
+        1.0 * adversarial_loss
+        + 0.7 * feat_match
+        + 0.3 * stereo_coherence
+        + 0.5 * multiscale_loss
+    )
+
+    return total_loss
 
 
 def calculate_feature_match_diff(
@@ -39,21 +48,55 @@ def calculate_feature_match_diff(
     return loss / len(real_features)
 
 
-def calculate_detail_preservation_loss(
-    real_specs: torch.Tensor, generated_specs: torch.Tensor
+def calculate_stereo_coherence_loss(spec: torch.Tensor) -> torch.Tensor:
+    """Calculate how well the low frequencies match between channels while allowing variation in highs."""
+    left, right = spec[:, 0:1], spec[:, 1:2]
+
+    # Split frequency ranges (assuming lower 30% is low freq)
+    low_freq_idx = int(spec.shape[2] * 0.3)
+    left_low, left_high = left[:, :, :low_freq_idx], left[:, :, low_freq_idx:]
+    right_low, right_high = right[:, :, :low_freq_idx], right[:, :, low_freq_idx:]
+
+    # Low frequencies should be similar
+    low_freq_coherence = F.mse_loss(left_low, right_low)
+
+    # High frequencies should have some variation
+    high_freq_diff = torch.mean(torch.abs(left_high - right_high))
+    min_diff_target = 0.1  # Minimum desired difference
+    high_freq_variation = F.relu(min_diff_target - high_freq_diff)
+
+    return low_freq_coherence + 0.5 * high_freq_variation
+
+
+def calculate_stereo_width(spec: torch.Tensor) -> torch.Tensor:
+    """Measure the stereo width as the average difference between channels."""
+    left, right = spec[:, 0:1], spec[:, 1:2]
+    return torch.mean(torch.abs(left - right))
+
+
+def calculate_multiscale_spectral_loss(
+    real_spec: torch.Tensor, generated_spec: torch.Tensor
 ) -> torch.Tensor:
-    """Calculate loss focusing on preserving fine details using gradient differences."""
-    # Compute gradients in both x and y directions
-    real_grad_x = torch.abs(real_specs[:, :, :, 1:] - real_specs[:, :, :, :-1])
-    real_grad_y = torch.abs(real_specs[:, :, 1:, :] - real_specs[:, :, :-1, :])
-    gen_grad_x = torch.abs(generated_specs[:, :, :, 1:] - generated_specs[:, :, :, :-1])
-    gen_grad_y = torch.abs(generated_specs[:, :, 1:, :] - generated_specs[:, :, :-1, :])
+    """Calculate spectral differences at multiple scales."""
+    scales = [1, 2, 4]  # Original, 2x zoom, 4x zoom
+    total_loss = 0.0
 
-    # Compare gradient differences with higher weight on larger gradients
-    grad_diff_x = torch.mean(torch.abs(real_grad_x - gen_grad_x) * (1.0 + real_grad_x))
-    grad_diff_y = torch.mean(torch.abs(real_grad_y - gen_grad_y) * (1.0 + real_grad_y))
+    for scale in scales:
+        if scale > 1:
+            # Create pooling layers for different scales
+            pool = torch.nn.AvgPool2d(kernel_size=scale, stride=scale)
+            real_scaled = pool(real_spec)
+            gen_scaled = pool(generated_spec)
+        else:
+            real_scaled = real_spec
+            gen_scaled = generated_spec
 
-    return grad_diff_x + grad_diff_y
+        # Calculate L1 loss at current scale
+        scale_loss = F.l1_loss(real_scaled, gen_scaled)
+        # Higher weights for finer details
+        total_loss += scale_loss * (1.0 / scale)
+
+    return total_loss
 
 
 def compute_c_loss(
@@ -64,22 +107,28 @@ def compute_c_loss(
     real_spec: torch.Tensor,
     training: bool,
 ) -> torch.Tensor:
-    """Calculate critic loss with improved spectral analysis."""
+    """Calculate critic loss with improved spectral and stereo analysis."""
     # Base loss
     wasserstein_dist = calculate_wasserstein_diff(real_validity, generated_validity)
 
-    # Spectral differences
-    # spectral_diff = calculate_spectral_diff(real_spec, generated_spec)
-    # spectral_convergence = calculate_spectral_convergence_diff(
-    #     real_spec, generated_spec
-    # )
-    multi_scale_loss = calculate_multi_scale_loss(real_spec, generated_spec)
+    # Enhanced spectral differences
+    spectral_diff = calculate_spectral_diff(real_spec, generated_spec)
+    spectral_convergence = calculate_spectral_convergence_diff(
+        real_spec, generated_spec
+    )
+    multiscale_diff = calculate_multiscale_spectral_loss(real_spec, generated_spec)
+
+    # Stereo-specific metrics
+    stereo_width_real = calculate_stereo_width(real_spec)
+    stereo_width_gen = calculate_stereo_width(generated_spec)
+    stereo_width_loss = F.mse_loss(stereo_width_gen, stereo_width_real)
 
     computed_c_loss = (
         1.0 * wasserstein_dist
-        # + 0.3 * spectral_diff
-        # + 0.3 * spectral_convergence
-        + 0.15 * multi_scale_loss
+        + 0.15 * spectral_diff
+        + 0.15 * spectral_convergence
+        + 0.3 * multiscale_diff
+        + 0.2 * stereo_width_loss
     )
 
     if training:
@@ -110,27 +159,6 @@ def calculate_spectral_convergence_diff(
     numerator = torch.norm(generated_spec - real_spec, p=2)
     denominator = torch.norm(real_spec, p=2) + 1e-8
     return numerator / denominator
-
-
-def calculate_multi_scale_loss(
-    real_spec: torch.Tensor, generated_spec: torch.Tensor
-) -> torch.Tensor:
-    """Calculate multi-scale analysis loss between real and generated spectrograms."""
-    scales = [1, 0.75, 0.5, 0.25, 0.125]
-    scale_weights = [1.0, 1.2, 1.5, 1.8, 2.0]
-    multi_scale_loss = torch.zeros(1, device=real_spec.device)
-
-    for s, weight in zip(scales, scale_weights):
-        if s < 1.0:
-            size = (
-                int(real_spec.shape[2] * s),
-                int(real_spec.shape[3] * s),
-            )
-            real_down = F.interpolate(real_spec, size=size, mode="bicubic")
-            gen_down = F.interpolate(generated_spec, size=size, mode="bicubic")
-            multi_scale_loss += weight * torch.mean(torch.abs(real_down - gen_down))
-
-    return multi_scale_loss
 
 
 def calculate_gradient_penalty(
@@ -300,6 +328,13 @@ def validate(
             total_is += metrics["is"]
             total_kid += metrics["kid"]
 
+            # Add stereo metrics to validation
+            stereo_width = calculate_stereo_width(generated_spec)
+            stereo_coherence = calculate_stereo_coherence_loss(generated_spec)
+            multiscale_quality = calculate_multiscale_spectral_loss(
+                real_spec, generated_spec
+            )
+
     return {
         "epoch": epoch_number,
         "g_loss": total_g_loss / len(dataloader),
@@ -309,6 +344,9 @@ def validate(
         "is": total_is / len(dataloader),
         "kid": total_kid / len(dataloader),
         "val_specs": generated_spec.cpu(),
+        "stereo_width": stereo_width.item(),
+        "stereo_coherence": stereo_coherence.item(),
+        "multiscale_quality": multiscale_quality.item(),
     }
 
 
@@ -368,6 +406,13 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         )
         print(
             f"Generated Range: [{val_metrics['val_specs'].min():.4f}, {val_metrics['val_specs'].max():.4f}]"
+        )
+
+        # Print additional metrics
+        print(
+            f"Stereo Metrics - Width: {val_metrics['stereo_width']:.4f} "
+            f"Coherence: {val_metrics['stereo_coherence']:.4f} "
+            f"Detail Quality: {val_metrics['multiscale_quality']:.4f}"
         )
 
         # End of epoch handling
