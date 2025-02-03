@@ -2,8 +2,6 @@ import os
 
 import librosa
 import numpy as np
-import plotly.graph_objects as go
-import plotly.subplots as sp
 import soundfile as sf
 import torch
 from matplotlib import pyplot as plt
@@ -105,47 +103,6 @@ class DataUtils:
         plt.close(fig)
 
     @staticmethod
-    def graph_spectrogram(
-        audio_data: NDArray[np.float32],
-        sample_name: str,
-        save_images: bool = False,
-    ) -> None:
-        fig = sp.make_subplots(rows=2, cols=1)
-
-        for i in range(SignalConstants.CHANNELS):
-            channel = audio_data[i]
-            spectrogram = channel.T  # Visualize Freq bins vertically
-
-            fig.add_trace(
-                go.Heatmap(z=spectrogram, coloraxis="coloraxis1"),
-                row=i + 1,
-                col=1,
-            )
-
-        fig.update_xaxes(title_text="Frames", row=1, col=1)
-        fig.update_xaxes(title_text="Frames", row=2, col=1)
-        fig.update_yaxes(title_text="Frequency Bins", row=1, col=1)
-        fig.update_yaxes(title_text="Frequency Bins", row=2, col=1)
-
-        fig.update_layout(
-            coloraxis1=dict(
-                colorscale="Viridis",
-                colorbar=dict(
-                    title="Loudness",
-                    titleside="right",
-                    ticksuffix="",
-                    dtick=channel.ptp() / 10,
-                ),
-            )
-        )
-        fig.update_layout(title_text=f"{sample_name}")
-
-        if not save_images:
-            fig.show()
-        else:
-            fig.write_image(f"outputs/spectrogram_images/{sample_name}.png")
-
-    @staticmethod
     def generate_sine_impulses(
         sample_length: float, num_impulses: int = 1, outPath: str = "model"
     ) -> None:
@@ -190,9 +147,7 @@ class ModelUtils:
         )
         self.generator.eval()
 
-    def generate_audio(
-        self, model_save_path: str, generation_count: int = 2, save_images: bool = False
-    ) -> None:
+    def generate_audio(self, model_save_path: str, generation_count: int = 2) -> None:
         """Generate audio with saved model."""
         self.load_model(model_save_path, ModelParams.DEVICE)
 
@@ -212,21 +167,6 @@ class ModelUtils:
                 f"{self.params.generated_audio_name}_{i + 1}.wav",
             )
             DataUtils.save_audio(audio_save_path, audio_info)
-
-            if self.params.visualize_generated:
-                vis_signal_after_istft = self.signal_processing.audio_to_norm_spec(
-                    audio_info
-                )
-                DataUtils.graph_spectrogram(
-                    current_sample,
-                    f"{self.params.generated_audio_name}_{i + 1}_before_istft",
-                    save_images,
-                )
-                DataUtils.graph_spectrogram(
-                    vis_signal_after_istft,
-                    f"{self.params.generated_audio_name}_{i + 1}_after_istft",
-                    save_images,
-                )
 
 
 class SignalProcessing:
@@ -367,10 +307,6 @@ class SignalProcessing:
 
         save_path = os.path.join(self.params.outputs_dir, f"{file_name}.wav")
         DataUtils.save_audio(save_path, istft)
-
-        if visualize is True:
-            DataUtils.graph_spectrogram(stft, "stft")
-            DataUtils.graph_spectrogram(vis_istft, "post istft")
 
     @staticmethod
     def fade_out_stereo_audio(y: np.ndarray, n_fade: int = 15) -> np.ndarray:

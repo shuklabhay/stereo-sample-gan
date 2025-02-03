@@ -19,7 +19,7 @@ model_selection = ModelType.SNARE
 class ModelParams:
     # Model params
     DEVICE = "cuda:7"
-    LATENT_DIM = 128
+    LATENT_DIM = 100
     BATCH_SIZE = 16
     DROPOUT_RATE = 0.1
 
@@ -34,7 +34,7 @@ class ModelParams:
     def __init__(self):
         self.load_params()
 
-        self.outputs_dir = "outputs"
+        self.outputs_dir = "static"
         self.compiled_data_path = "data/compiled_data.npy"
         self.generated_audio_name = "generated_audio"
         self.visualize_generated = True

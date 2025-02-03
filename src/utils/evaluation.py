@@ -7,26 +7,6 @@ from torchmetrics.image.kid import KernelInceptionDistance
 from utils.helpers import DataUtils, ModelParams
 
 
-def calculate_weighted_improvement(metrics: dict) -> float:
-    """Calculate weighted combination of metrics for scheduler stepping."""
-    weights = {
-        "fad": 0.6,  # Audio feature
-        "is": 0.2,  # More reliable image feature
-        "kid": 0.2,  # Basic image feature
-    }
-
-    # Normalize IS
-    normalized_is = 1.0 / (metrics["is"] + 1e-8)
-
-    weighted_sum = (
-        weights["fad"] * metrics["fad"]
-        + weights["is"] * normalized_is
-        + weights["kid"] * metrics["kid"]
-    ) / 3
-
-    return weighted_sum
-
-
 def calculate_audio_metrics(
     real_specs: torch.Tensor, generated_specs: torch.Tensor
 ) -> dict:

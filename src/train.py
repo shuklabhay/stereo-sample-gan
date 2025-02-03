@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils.constants import model_selection
-from utils.evaluation import calculate_audio_metrics, calculate_weighted_improvement
+from utils.evaluation import calculate_audio_metrics, calculate_fad
 from utils.helpers import DataUtils, ModelParams, ModelUtils, SignalProcessing
 
 # Initialize parameters
@@ -15,20 +15,14 @@ signal_processing = SignalProcessing(model_params.sample_length)
 
 
 def compute_g_loss(critic, generated_validity, generated_specs, real_specs):
-    # Base losses
     adversarial_loss = -torch.mean(generated_validity)
     feat_match = calculate_feature_match_diff(critic, real_specs, generated_specs)
-
-    # New stereo-aware losses
-    stereo_coherence = calculate_stereo_coherence_loss(generated_specs)
-    multiscale_loss = calculate_multiscale_spectral_loss(real_specs, generated_specs)
+    l1_loss = calculate_l1_loss(real_specs, generated_specs)
+    fad_loss = calculate_fad(model_params, real_specs, generated_specs)
 
     # Combine losses with weights
     total_loss = (
-        1.0 * adversarial_loss
-        + 0.7 * feat_match
-        + 0.3 * stereo_coherence
-        + 0.5 * multiscale_loss
+        1.0 * adversarial_loss + 0.7 * feat_match + 1.5 * l1_loss + 0.5 * fad_loss
     )
 
     return total_loss
@@ -48,87 +42,24 @@ def calculate_feature_match_diff(
     return loss / len(real_features)
 
 
-def calculate_stereo_coherence_loss(spec: torch.Tensor) -> torch.Tensor:
-    """Calculate how well the low frequencies match between channels while allowing variation in highs."""
-    left, right = spec[:, 0:1], spec[:, 1:2]
-
-    # Split frequency ranges (assuming lower 30% is low freq)
-    low_freq_idx = int(spec.shape[2] * 0.3)
-    left_low, left_high = left[:, :, :low_freq_idx], left[:, :, low_freq_idx:]
-    right_low, right_high = right[:, :, :low_freq_idx], right[:, :, low_freq_idx:]
-
-    # Low frequencies should be similar
-    low_freq_coherence = F.mse_loss(left_low, right_low)
-
-    # High frequencies should have some variation
-    high_freq_diff = torch.mean(torch.abs(left_high - right_high))
-    min_diff_target = 0.1  # Minimum desired difference
-    high_freq_variation = F.relu(min_diff_target - high_freq_diff)
-
-    return low_freq_coherence + 0.5 * high_freq_variation
-
-
-def calculate_stereo_width(spec: torch.Tensor) -> torch.Tensor:
-    """Measure the stereo width as the average difference between channels."""
-    left, right = spec[:, 0:1], spec[:, 1:2]
-    return torch.mean(torch.abs(left - right))
-
-
-def calculate_multiscale_spectral_loss(
-    real_spec: torch.Tensor, generated_spec: torch.Tensor
+def calculate_l1_loss(
+    real_specs: torch.Tensor, generated_specs: torch.Tensor
 ) -> torch.Tensor:
-    """Calculate spectral differences at multiple scales."""
-    scales = [1, 2, 4]  # Original, 2x zoom, 4x zoom
-    total_loss = 0.0
-
-    for scale in scales:
-        if scale > 1:
-            # Create pooling layers for different scales
-            pool = torch.nn.AvgPool2d(kernel_size=scale, stride=scale)
-            real_scaled = pool(real_spec)
-            gen_scaled = pool(generated_spec)
-        else:
-            real_scaled = real_spec
-            gen_scaled = generated_spec
-
-        # Calculate L1 loss at current scale
-        scale_loss = F.l1_loss(real_scaled, gen_scaled)
-        # Higher weights for finer details
-        total_loss += scale_loss * (1.0 / scale)
-
-    return total_loss
+    """Calculate L1 loss for mel-spectrograms."""
+    return F.l1_loss(generated_specs, real_specs)
 
 
 def compute_c_loss(
-    critic: Critic,
-    generated_validity: torch.Tensor,
-    real_validity: torch.Tensor,
-    generated_spec: torch.Tensor,
-    real_spec: torch.Tensor,
-    training: bool,
-) -> torch.Tensor:
-    """Calculate critic loss with improved spectral and stereo analysis."""
-    # Base loss
+    critic, generated_validity, real_validity, generated_spec, real_spec, training
+):
     wasserstein_dist = calculate_wasserstein_diff(real_validity, generated_validity)
-
-    # Enhanced spectral differences
     spectral_diff = calculate_spectral_diff(real_spec, generated_spec)
     spectral_convergence = calculate_spectral_convergence_diff(
         real_spec, generated_spec
     )
-    multiscale_diff = calculate_multiscale_spectral_loss(real_spec, generated_spec)
-
-    # Stereo-specific metrics
-    stereo_width_real = calculate_stereo_width(real_spec)
-    stereo_width_gen = calculate_stereo_width(generated_spec)
-    stereo_width_loss = F.mse_loss(stereo_width_gen, stereo_width_real)
 
     computed_c_loss = (
-        1.0 * wasserstein_dist
-        + 0.15 * spectral_diff
-        + 0.15 * spectral_convergence
-        + 0.3 * multiscale_diff
-        + 0.2 * stereo_width_loss
+        1.0 * wasserstein_dist + 0.2 * spectral_diff + 0.2 * spectral_convergence
     )
 
     if training:
@@ -328,13 +259,6 @@ def validate(
             total_is += metrics["is"]
             total_kid += metrics["kid"]
 
-            # Add stereo metrics to validation
-            stereo_width = calculate_stereo_width(generated_spec)
-            stereo_coherence = calculate_stereo_coherence_loss(generated_spec)
-            multiscale_quality = calculate_multiscale_spectral_loss(
-                real_spec, generated_spec
-            )
-
     return {
         "epoch": epoch_number,
         "g_loss": total_g_loss / len(dataloader),
@@ -344,9 +268,6 @@ def validate(
         "is": total_is / len(dataloader),
         "kid": total_kid / len(dataloader),
         "val_specs": generated_spec.cpu(),
-        "stereo_width": stereo_width.item(),
-        "stereo_coherence": stereo_coherence.item(),
-        "multiscale_quality": multiscale_quality.item(),
     }
 
 
@@ -390,9 +311,8 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         val_metrics = validate(generator, critic, val_loader, epoch)
 
         # Step schedulers using weighted metric sum
-        weighted_val_metric = calculate_weighted_improvement(val_metrics)
-        scheduler_G.step(weighted_val_metric)
-        scheduler_C.step(weighted_val_metric)
+        scheduler_G.step(val_metrics["fad"])
+        scheduler_C.step(val_metrics["fad"])
 
         # Print information
         print(
@@ -403,16 +323,6 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         )
         print(
             f"VAL FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}"
-        )
-        print(
-            f"Generated Range: [{val_metrics['val_specs'].min():.4f}, {val_metrics['val_specs'].max():.4f}]"
-        )
-
-        # Print additional metrics
-        print(
-            f"Stereo Metrics - Width: {val_metrics['stereo_width']:.4f} "
-            f"Coherence: {val_metrics['stereo_coherence']:.4f} "
-            f"Detail Quality: {val_metrics['multiscale_quality']:.4f}"
         )
 
         # End of epoch handling
