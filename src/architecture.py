@@ -2,135 +2,167 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
+
 from utils.helpers import ModelParams, SignalConstants
 
 
+# Model Components
 class ResizeConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, spatial_size):
-        super().__init__()
-        self.upsample = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        self.skip_conv = (
-            nn.Conv2d(in_channels, out_channels, 1)
-            if in_channels != out_channels
-            else nn.Identity()
-        )
-        self.norm = nn.LayerNorm([out_channels, spatial_size, spatial_size])
-        self.activation = nn.LeakyReLU(0.2)
-        self.dropout = nn.Dropout(ModelParams.DROPOUT_RATE)
+    def __init__(self, in_channels, out_channels, scale_factor=2, final_block=False):
+        super(ResizeConvBlock, self).__init__()
+
+        layers = [
+            nn.Upsample(scale_factor=scale_factor, mode="nearest"),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+        ]
+
+        if not final_block:
+            layers.extend(
+                [
+                    nn.BatchNorm2d(out_channels),
+                    nn.LeakyReLU(0.2),
+                    nn.Dropout(ModelParams.DROPOUT_RATE),
+                ]
+            )
+        else:
+            layers.append(nn.Tanh())
+
+        self.block = nn.Sequential(*layers)
 
     def forward(self, x):
-        x_up = self.upsample(x)
-        x_conv = self.conv(x_up)
-        x_skip = self.skip_conv(x_up)
-        x_out = x_conv + x_skip
-        x_out = self.norm(x_out)
-        x_out = self.activation(x_out)
-        x_out = self.dropout(x_out)
-        return x_out
+        return self.block(x)
 
 
 class Generator(nn.Module):
     def __init__(self):
-        super().__init__()
+        super(Generator, self).__init__()
+        # Preconvolution 1x1 -> 4x4
         self.preconv_size = 4
         self.preconv_channels = ModelParams.LATENT_DIM
-        self.initial_features = self.preconv_channels * self.preconv_size**2
+        self.initial_features = (
+            self.preconv_channels * self.preconv_size * self.preconv_size
+        )
 
         self.initial = nn.Sequential(
             nn.Linear(ModelParams.LATENT_DIM, self.initial_features),
-            nn.LayerNorm(self.initial_features),
+            nn.BatchNorm1d(self.initial_features),
             nn.LeakyReLU(0.2),
             nn.Dropout(ModelParams.DROPOUT_RATE),
         )
 
+        # Resize convolution blocks
         self.resize_blocks = nn.Sequential(
-            ResizeConvBlock(128, 64, 8),
-            ResizeConvBlock(64, 32, 16),
-            ResizeConvBlock(32, 16, 32),
-            ResizeConvBlock(16, 8, 64),
-            ResizeConvBlock(8, 4, 128),
-            ResizeConvBlock(4, 2, 256),
+            ResizeConvBlock(self.preconv_channels, 64),  # 4x4 -> 8x8
+            ResizeConvBlock(64, 32),  # 8x8 -> 16x16
+            ResizeConvBlock(32, 16),  # 16x16 -> 32x32
+            ResizeConvBlock(16, 8),  # 32x32 -> 64x64
+            ResizeConvBlock(8, 8),  # 64x64 -> 128x128
+            ResizeConvBlock(
+                8, SignalConstants.CHANNELS, scale_factor=2, final_block=True
+            ),  # 128x128 -> 256x256
         )
 
-        self.tanh = nn.Tanh()
+    def forward(self, z):
+        batch_size = z.size(0)
 
-    def forward(self, x):
-        batch_size = x.size(0)
+        # Reshape input: Ensure z is properly flattened
+        x = z.view(batch_size, -1)
+
+        # Pass through initial dense layer
         x = self.initial(x)
+
+        # Reshape for convolution
         x = x.view(
-            batch_size, self.preconv_channels, self.preconv_size, self.preconv_size
+            batch_size,
+            self.preconv_channels,
+            self.preconv_size,
+            self.preconv_size,
         )
+
+        # Pass through resize blocks
         x = self.resize_blocks(x)
-        x = self.tanh(x)
         return x
-
-
-class Critic(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv_blocks = nn.Sequential(
-            spectral_norm(nn.Conv2d(SignalConstants.CHANNELS, 32, 4, 4, 1)),
-            nn.LeakyReLU(0.2),
-            nn.InstanceNorm2d(32),
-            LinearAttention(32),
-            spectral_norm(nn.Conv2d(32, 64, 4, 2, 1)),
-            nn.LeakyReLU(0.2),
-            nn.InstanceNorm2d(64),
-            spectral_norm(nn.Conv2d(64, 128, 4, 2, 1)),
-            nn.LeakyReLU(0.2),
-            nn.InstanceNorm2d(128),
-            spectral_norm(nn.Conv2d(128, 256, 4, 2, 1)),
-            nn.LeakyReLU(0.2),
-            nn.InstanceNorm2d(256),
-            LinearAttention(256),
-            spectral_norm(nn.Conv2d(256, 512, 4, 2, 1)),
-            nn.LeakyReLU(0.2),
-            nn.InstanceNorm2d(512),
-            MiniBatchStdDev(),
-            spectral_norm(nn.Conv2d(513, 1, 4, 1, 0)),
-            nn.Flatten(),
-        )
-
-    def extract_features(self, x):
-        features = []
-        for layer in self.conv_blocks:
-            x = layer(x)
-            if isinstance(layer, LinearAttention):
-                features.append(x)
-        return features
-
-    def forward(self, x):
-        return self.conv_blocks(x)
-
-
-class MiniBatchStdDev(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        std = torch.std(x, dim=0, unbiased=False)
-        mean_std = torch.mean(std)
-        shape = [x.shape[0], 1, *x.shape[2:]]
-        mean_std = mean_std.expand(shape)
-        return torch.cat([x, mean_std], dim=1)
 
 
 class LinearAttention(nn.Module):
     def __init__(self, in_channels):
-        super().__init__()
+        super(LinearAttention, self).__init__()
         self.reduced_channels = max(in_channels // 8, 1)
-        self.query = nn.Conv2d(in_channels, self.reduced_channels, 1)
-        self.key = nn.Conv2d(in_channels, self.reduced_channels, 1)
-        self.value = nn.Conv2d(in_channels, in_channels, 1)
+        self.query = nn.Conv2d(
+            in_channels, self.reduced_channels, kernel_size=1, groups=1
+        )
+        self.key = nn.Conv2d(
+            in_channels, self.reduced_channels, kernel_size=1, groups=1
+        )
+        self.value = nn.Conv2d(in_channels, in_channels, kernel_size=1, groups=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
-        B, C, H, W = x.shape
-        q = self.query(x).view(B, -1, H * W)
-        k = self.key(x).view(B, -1, H * W).permute(0, 2, 1)
-        v = self.value(x).view(B, -1, H * W)
+        batch, channels, height, width = x.size()
 
-        attn = F.softmax(torch.bmm(k, q), dim=-1)
-        out = torch.bmm(v, attn).view(B, C, H, W)
-        return self.gamma * out + x
+        query = self.query(x).view(batch, -1, height * width)
+        key = self.key(x).view(batch, -1, height * width).permute(0, 2, 1)
+        value = self.value(x).view(batch, -1, height * width)
+
+        attention = torch.bmm(key, query)
+        attention = F.normalize(F.relu(attention), p=1, dim=1)
+
+        out = torch.bmm(value, attention)
+        out = out.view(batch, channels, height, width)
+        out = self.gamma * out + x
+        return out
+
+
+class Critic(nn.Module):
+    def __init__(self):
+        super(Critic, self).__init__()
+
+        # Convolution blocks
+        self.conv_blocks = nn.Sequential(
+            spectral_norm(
+                nn.Conv2d(
+                    SignalConstants.CHANNELS, 4, kernel_size=4, stride=2, padding=1
+                )
+            ),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(ModelParams.DROPOUT_RATE),
+            spectral_norm(nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=1)),
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm2d(8),
+            nn.Dropout(ModelParams.DROPOUT_RATE),
+            spectral_norm(nn.Conv2d(8, 16, kernel_size=4, stride=2, padding=1)),
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm2d(16),
+            nn.Dropout(ModelParams.DROPOUT_RATE),
+            LinearAttention(16),
+            spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1)),
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm2d(32),
+            nn.Dropout(ModelParams.DROPOUT_RATE),
+            spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)),
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm2d(64),
+            nn.Dropout(ModelParams.DROPOUT_RATE),
+            spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)),
+            nn.LeakyReLU(0.2),
+            nn.BatchNorm2d(128),
+            nn.Dropout(ModelParams.DROPOUT_RATE),
+            spectral_norm(nn.Conv2d(128, 1, kernel_size=4, stride=1, padding=0)),
+            nn.Flatten(),
+        )
+
+    def extract_features(self, x):
+        """Extract features for x from specific layers."""
+        features = [
+            x
+            for i, layer in enumerate(self.conv_blocks)
+            if i == 0
+            or isinstance(layer, LinearAttention)
+            or i == len(self.conv_blocks) - 2
+        ]
+
+        return features
+
+    def forward(self, x):
+        x = self.conv_blocks(x)
+        return x
