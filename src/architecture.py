@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
-
 from utils.helpers import ModelParams, SignalConstants
 
 
@@ -143,6 +142,7 @@ class Critic(nn.Module):
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(64),
             nn.Dropout(ModelParams.DROPOUT_RATE),
+            LinearAttention(64),
             spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)),
             nn.LeakyReLU(0.2),
             nn.BatchNorm2d(128),

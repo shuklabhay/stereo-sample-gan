@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from architecture import Critic, Generator
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils.constants import model_selection
@@ -22,7 +22,7 @@ def compute_g_loss(critic, generated_validity, generated_specs, real_specs):
 
     # Combine losses with weights
     total_loss = (
-        1.0 * adversarial_loss + 0.7 * feat_match + 1.5 * l1_loss + 0.5 * fad_loss
+        1.0 * adversarial_loss + 0.8 * feat_match + 0.8 * l1_loss + 0.5 * fad_loss
     )
 
     return total_loss
@@ -283,8 +283,8 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     optimizer_C = torch.optim.Adam(
         critic.parameters(), lr=model_params.LR_C, betas=(0.5, 0.999)
     )
-    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.5, patience=3)
-    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.5, patience=3)
+    scheduler_G = CosineAnnealingWarmRestarts(optimizer_G, T_0=10, T_mult=2)
+    scheduler_C = CosineAnnealingWarmRestarts(optimizer_C, T_0=10, T_mult=2)
     generator.to(model_params.DEVICE)
     critic.to(model_params.DEVICE)
 
