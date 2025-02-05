@@ -119,6 +119,7 @@ class Critic(nn.Module):
             x = layer(x)
             if isinstance(layer, LinearAttention) or i in [
                 0,
+                7,
                 len(self.conv_blocks) - 2,
             ]:
                 features.append(x)

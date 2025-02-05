@@ -19,16 +19,16 @@ model_selection = ModelType.SNARE
 class ModelParams:
     # Model params
     DEVICE = "cuda:7"
-    LATENT_DIM = 100
+    LATENT_DIM = 128
     BATCH_SIZE = 16
-    DROPOUT_RATE = 0.1
+    DROPOUT_RATE = 0.10
 
     # Training params
     CRITIC_STEPS = 5
-    LR_G = 2e-5
-    LR_C = 4e-5
+    LR_G = 2e-4
+    LR_C = 4e-4
     LAMBDA_GP = 10
-    N_EPOCHS = 35
+    N_EPOCHS = 50
 
     # Model specific params
     def __init__(self):
