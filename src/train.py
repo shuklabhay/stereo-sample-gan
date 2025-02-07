@@ -14,18 +14,12 @@ model_utils = ModelUtils(model_params.sample_length)
 signal_processing = SignalProcessing(model_params.sample_length)
 
 
-def compute_g_loss(critic, generated_validity, generated_specs, real_specs):
+def compute_g_loss(generated_validity, generated_specs, real_specs):
     adversarial_loss = -torch.mean(generated_validity)
-    # feat_loss = calculate_feature_match_diff(critic, real_specs, generated_specs)
     freq_energy = calculate_freq_energy(generated_specs, real_specs)
     decay_loss = calculate_decay_loss(generated_specs, real_specs)
 
-    total_loss = (
-        adversarial_loss
-        # + 0.5 * feat_loss
-        + 0.5 * freq_energy
-        + 0.2 * decay_loss
-    )
+    total_loss = adversarial_loss + 0.5 * freq_energy + 0.2 * decay_loss
     return total_loss
 
 
@@ -77,36 +71,10 @@ def calculate_decay_loss(
     return total_loss
 
 
-def calculate_multiscale_detail_loss(
-    generated_specs: torch.Tensor, real_specs: torch.Tensor
-) -> torch.Tensor:
-    """
-    Compute a multi-scale L1 loss to capture fine spectrogram details.
-    Downsample spectrograms to different scales and compute weighted L1 losses.
-    """
-    scales = [1.0, 0.5, 0.25]
-    loss = 0.0
-    weight = 1.0
-    for scale in scales:
-        if scale != 1.0:
-            gen_scaled = F.interpolate(
-                generated_specs, scale_factor=scale, mode="bicubic", align_corners=False
-            )
-            real_scaled = F.interpolate(
-                real_specs, scale_factor=scale, mode="bicubic", align_corners=False
-            )
-        else:
-            gen_scaled = generated_specs
-            real_scaled = real_specs
-        loss = loss + weight * F.l1_loss(gen_scaled, real_scaled)
-        weight *= 0.5  # reduce weight for smaller scales
-    return loss
-
-
 def compute_c_loss(
     critic, generated_validity, real_validity, generated_spec, real_spec, training
 ):
-    wasserstein_dist = torch.mean(generated_validity) - torch.mean(real_validity)
+    wasserstein_dist = calculate_wasserstein_diff(real_validity, generated_validity)
     spectral_diff = calculate_spectral_diff(real_spec, generated_spec)
     spectral_convergence = calculate_spectral_convergence_diff(
         real_spec, generated_spec
@@ -225,9 +193,7 @@ def train_epoch(
 
             generated_spec = generator(z)
             generated_validity = critic(generated_spec)
-            g_loss = compute_g_loss(
-                critic, generated_validity, generated_spec, real_spec
-            )
+            g_loss = compute_g_loss(generated_validity, generated_spec, real_spec)
 
             g_loss.backward()
             torch.nn.utils.clip_grad_norm_(generator.parameters(), 1.0)
@@ -277,9 +243,7 @@ def validate(
             real_validity = critic(real_spec)
             generated_validity = critic(generated_spec)
 
-            g_loss = compute_g_loss(
-                critic, generated_validity, generated_spec, real_spec
-            )
+            g_loss = compute_g_loss(generated_validity, generated_spec, real_spec)
             c_loss = compute_c_loss(
                 critic,
                 generated_validity,

@@ -31,7 +31,7 @@ class ModelParams:
     N_EPOCHS = 50
     PATIENCE = 10
 
-    # PGAN params
+    # PG-GAN params
     MAX_STAGE = 4
     INITIAL_SIZE = 16
     FADE_IN_EPOCHS = 8
