@@ -16,12 +16,15 @@ signal_processing = SignalProcessing(model_params.sample_length)
 
 def compute_g_loss(critic, generated_validity, generated_specs, real_specs):
     adversarial_loss = -torch.mean(generated_validity)
-    feat_loss = calculate_feature_match_diff(critic, real_specs, generated_specs)
+    # feat_loss = calculate_feature_match_diff(critic, real_specs, generated_specs)
     freq_energy = calculate_freq_energy(generated_specs, real_specs)
     decay_loss = calculate_decay_loss(generated_specs, real_specs)
 
     total_loss = (
-        adversarial_loss + 0.6 * feat_loss + 0.3 * freq_energy + 0.3 * decay_loss
+        adversarial_loss
+        # + 0.5 * feat_loss
+        + 0.5 * freq_energy
+        + 0.2 * decay_loss
     )
     return total_loss
 
@@ -44,12 +47,10 @@ def calculate_freq_energy(
     generated_specs: torch.Tensor, real_specs: torch.Tensor
 ) -> torch.Tensor:
     """Calculate l1 loss across spectrograms."""
-    # Calculate mean energy per frequency band
+    # Calculate mean energy per frequency band; shapes assumed consistent.
     generated_freq_energy = torch.mean(generated_specs, dim=3)
     real_freq_energy = torch.mean(real_specs, dim=3)
-
-    freq_loss = F.l1_loss(generated_freq_energy, real_freq_energy)
-    return freq_loss
+    return F.l1_loss(generated_freq_energy, real_freq_energy)
 
 
 def calculate_decay_loss(
@@ -76,10 +77,35 @@ def calculate_decay_loss(
     return total_loss
 
 
+def calculate_multiscale_detail_loss(
+    generated_specs: torch.Tensor, real_specs: torch.Tensor
+) -> torch.Tensor:
+    """
+    Compute a multi-scale L1 loss to capture fine spectrogram details.
+    Downsample spectrograms to different scales and compute weighted L1 losses.
+    """
+    scales = [1.0, 0.5, 0.25]
+    loss = 0.0
+    weight = 1.0
+    for scale in scales:
+        if scale != 1.0:
+            gen_scaled = F.interpolate(
+                generated_specs, scale_factor=scale, mode="bicubic", align_corners=False
+            )
+            real_scaled = F.interpolate(
+                real_specs, scale_factor=scale, mode="bicubic", align_corners=False
+            )
+        else:
+            gen_scaled = generated_specs
+            real_scaled = real_specs
+        loss = loss + weight * F.l1_loss(gen_scaled, real_scaled)
+        weight *= 0.5  # reduce weight for smaller scales
+    return loss
+
+
 def compute_c_loss(
     critic, generated_validity, real_validity, generated_spec, real_spec, training
 ):
-    # Increase the weight of spectral differences for critic
     wasserstein_dist = torch.mean(generated_validity) - torch.mean(real_validity)
     spectral_diff = calculate_spectral_diff(real_spec, generated_spec)
     spectral_convergence = calculate_spectral_convergence_diff(
@@ -88,15 +114,14 @@ def compute_c_loss(
 
     if training:
         gradient_penalty = calculate_gradient_penalty(critic, real_spec, generated_spec)
-        # Add spectral regularization during training
         return (
             wasserstein_dist
             + model_params.LAMBDA_GP * gradient_penalty
-            + 0.5 * spectral_diff  # Increased from 0.3
-            + 0.5 * spectral_convergence  # Added explicit convergence term
+            + 0.3 * spectral_diff
+            + 0.3 * spectral_convergence
         )
 
-    return wasserstein_dist + 0.2 * spectral_diff + 0.2 * spectral_convergence
+    return wasserstein_dist + 0.3 * spectral_diff + 0.3 * spectral_convergence
 
 
 def calculate_wasserstein_diff(
@@ -109,14 +134,12 @@ def calculate_wasserstein_diff(
 def calculate_spectral_diff(
     real_spec: torch.Tensor, generated_spec: torch.Tensor
 ) -> torch.Tensor:
-    """Calculate spectral difference loss metric."""
     return torch.mean(torch.abs(real_spec - generated_spec))
 
 
 def calculate_spectral_convergence_diff(
     real_spec: torch.Tensor, generated_spec: torch.Tensor
 ) -> torch.Tensor:
-    """Calculate spectral convergence loss metric."""
     numerator = torch.norm(generated_spec - real_spec, p=2)
     denominator = torch.norm(real_spec, p=2) + 1e-8
     return numerator / denominator
@@ -127,16 +150,12 @@ def calculate_gradient_penalty(
     real_samples: torch.Tensor,
     generated_samples: torch.Tensor,
 ) -> torch.Tensor:
-    """Calculate gradient penalty for WGAN-GP."""
     batch_size = real_samples.size(0)
+    # Removed upsampling logic; the critic guarantees compatible spatial dimensions.
     alpha = torch.rand(batch_size, 1, 1, 1).to(model_params.DEVICE)
-
-    # Interpolate between real and generated samples
     interpolates = (
         real_samples * alpha + generated_samples * (1 - alpha)
     ).requires_grad_(True)
-
-    # Compute gradients
     c_interpolates = critic(interpolates)
     gradients = torch.autograd.grad(
         outputs=c_interpolates,
@@ -145,12 +164,9 @@ def calculate_gradient_penalty(
         create_graph=True,
         retain_graph=True,
     )[0]
-
     gradients = gradients.view(batch_size, -1)
     gradient_norm = gradients.norm(2, dim=1)
-    gradient_penalty = ((gradient_norm - 1) ** 2).mean()
-
-    return gradient_penalty
+    return ((gradient_norm - 1) ** 2).mean()
 
 
 def train_epoch(
@@ -298,10 +314,11 @@ def validate(
 
 def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     """Training loop."""
-    # Prepare loop
     print("Starting training for", model_params.selected_model)
-    generator = Generator()
-    critic = Critic()
+    # Initialize models
+    generator = Generator(stage=0)
+    critic = Critic(stage=0)
+
     optimizer_G = torch.optim.RMSprop(
         generator.parameters(),
         lr=model_params.LR_G,
@@ -340,7 +357,6 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         "kid": float("inf"),
     }
     epochs_no_improve = 0
-    patience = 10
 
     for epoch in range(model_params.N_EPOCHS):
         # Train
@@ -371,14 +387,17 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             f"VAL FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}"
         )
 
+        # Step progressive growing models
+        generator.progress_step()
+        critic.progress_step()
+
         # End of epoch handling
         DataUtils.visualize_spectrogram_grid(
             val_metrics["val_specs"],
-            f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}",
+            f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f} - Stage {generator.stage}/{ModelParams.MAX_STAGE}",
             f"static/{model_selection.name.lower()}_progress_val_spectrograms.png",
         )
 
-        # Early exit checking all metrics
         if val_metrics["fad"] < best_metrics["fad"]:
             best_metrics["fad"] = val_metrics["fad"]
             best_metrics["is"] = val_metrics["is"]
@@ -386,7 +405,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             epochs_no_improve = 0
             DataUtils.visualize_spectrogram_grid(
                 val_metrics["val_specs"],
-                f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}",
+                f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f} - Stage {generator.stage}/{ModelParams.MAX_STAGE}",
                 f"static/{model_selection.name.lower()}_best_val_spectrograms.png",
             )
             model_utils.save_model(generator)
@@ -397,6 +416,6 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             epochs_no_improve += 1
             print(f"Epochs without improvement: {epochs_no_improve}")
 
-        if epochs_no_improve >= patience:
+        if epochs_no_improve >= model_params.PATIENCE:
             print("Early stopping triggered")
             break

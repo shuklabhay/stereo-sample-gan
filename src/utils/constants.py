@@ -20,7 +20,7 @@ class ModelParams:
     # Model params
     DEVICE = "cuda:7"
     LATENT_DIM = 128
-    BATCH_SIZE = 16
+    BATCH_SIZE = 64
     DROPOUT_RATE = 0.10
 
     # Training params
@@ -29,6 +29,13 @@ class ModelParams:
     LR_C = 4e-4
     LAMBDA_GP = 10
     N_EPOCHS = 50
+    PATIENCE = 10
+
+    # PGAN params
+    MAX_STAGE = 4
+    INITIAL_SIZE = 16
+    FADE_IN_EPOCHS = 8
+    GROWTH_FACTOR = 2.0
 
     # Model specific params
     def __init__(self):
@@ -91,4 +98,5 @@ class SignalConstants:
     def FT_HOP(self) -> int:
         total_samples = int(self.sample_length * self.SR)
         hop = (total_samples - self.FT_WIN) // (self.FRAMES - 1)
+        return hop
         return hop
