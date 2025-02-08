@@ -356,12 +356,6 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         critic.progress_step()
 
         # End of epoch handling
-        DataUtils.visualize_spectrogram_grid(
-            val_metrics["val_specs"],
-            f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f} - Stage {generator.stage}/{ModelParams.MAX_STAGE}",
-            f"static/{model_selection.name.lower()}_progress_val_spectrograms.png",
-        )
-
         if val_metrics["fad"] < best_metrics["fad"]:
             best_metrics["fad"] = val_metrics["fad"]
             best_metrics["is"] = val_metrics["is"]

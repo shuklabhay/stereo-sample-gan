@@ -12,7 +12,7 @@ class ModelType(Enum):
     SNARE = "Snare"
 
 
-model_selection = ModelType.SNARE
+model_selection = ModelType.KICKDRUM
 
 
 @dataclass
