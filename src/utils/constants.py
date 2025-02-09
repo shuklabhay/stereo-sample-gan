@@ -17,13 +17,13 @@ model_selection = ModelType.KICKDRUM
 
 @dataclass
 class ModelParams:
-    # Model params
+    # Model parameters
     DEVICE = "cuda:7"
     LATENT_DIM = 128
     BATCH_SIZE = 64
     DROPOUT_RATE = 0.10
 
-    # Training params
+    # Training parameters
     CRITIC_STEPS = 5
     LR_G = 2e-4
     LR_C = 4e-4
@@ -31,13 +31,13 @@ class ModelParams:
     N_EPOCHS = 50
     PATIENCE = 10
 
-    # PG-GAN params
+    # PG-GAN parameters
     MAX_STAGE = 4
     INITIAL_SIZE = 16
     FADE_IN_EPOCHS = 8
     GROWTH_FACTOR = 2.0
 
-    # Model specific params
+    # Model specific parameters
     def __init__(self):
         self.load_params()
 
