@@ -7,200 +7,40 @@ from torch.nn.utils import spectral_norm
 from utils.helpers import ModelParams, SignalConstants
 
 
+# Basic Utilities
 def interp(x: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
-    """Interpolate a shape."""
+    """Interpolate tensor using bicubic interpolation."""
     return F.interpolate(x, size=size, mode="bicubic", align_corners=False)
 
 
-class Generator(nn.Module):
-    def __init__(self, stage: Optional[int] = None, alpha: float = 1.0) -> None:
+class PixelNorm(nn.Module):
+    """Normalizes the features of each pixel independently."""
+
+    def __init__(self, epsilon: float = 1e-8) -> None:
         super().__init__()
-        # General settings
-        self.max_stage = ModelParams.MAX_STAGE
-        self.stage = stage if stage is not None else self.max_stage
-        self.alpha = alpha
-
-        # Initial block parameters and projections
-        self.initial_channels = 128
-        self.initial_size = ModelParams.INITIAL_SIZE
-        self.final_size = self.initial_size * (2**ModelParams.MAX_STAGE)
-        self.initial = nn.Sequential(
-            nn.Linear(
-                ModelParams.LATENT_DIM,
-                self.initial_channels * self.initial_size * self.initial_size,
-            ),
-            nn.LeakyReLU(0.2),
-            PixelNorm(),
-        )
-
-        # toStereo converters
-        self.toStereo = nn.ModuleList(
-            [nn.Conv2d(self.initial_channels, SignalConstants.CHANNELS, kernel_size=1)]
-        )
-
-        # Upsampling blocks and converters
-        self.blocks = nn.ModuleList()
-        in_channels = self.initial_channels
-        for i in range(1, self.max_stage + 1):
-            out_channels = max(in_channels // 2, 8)
-            block = nn.Sequential(
-                nn.Upsample(scale_factor=2, mode="nearest"),
-                nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-                nn.LeakyReLU(0.2),
-                PixelNorm(),
-                nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-                nn.LeakyReLU(0.2),
-                PixelNorm(),
-            )
-            self.blocks.append(block)
-            self.toStereo.append(
-                nn.Conv2d(out_channels, SignalConstants.CHANNELS, kernel_size=1)
-            )
-            in_channels = out_channels
-
-    def progress_step(self) -> None:
-        if self.alpha < 1.0:
-            self.alpha = min(
-                self.alpha
-                + ModelParams.GROWTH_FACTOR * (1.0 / ModelParams.FADE_IN_EPOCHS),
-                1.0,
-            )
-        elif self.stage < self.max_stage:
-            self.stage += 1
-            self.alpha = 0.0
+        self.epsilon = epsilon
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        batch = x.size(0)
-        out = self.initial(x)
-        out = out.view(
-            batch, self.initial_channels, self.initial_size, self.initial_size
-        )
-        if self.stage == 0:
-            stereo = interp(self.toStereo[0](out), (self.final_size, self.final_size))
-        else:
-            for i in range(1, self.stage + 1):
-                prev_out = out
-                out = self.blocks[i - 1](out)
-            if self.alpha < 1.0 and self.stage > 0:
-                new_stereo = interp(
-                    self.toStereo[self.stage](out), (self.final_size, self.final_size)
-                )
-                up_prev = interp(
-                    self.toStereo[self.stage - 1](prev_out),
-                    (self.final_size, self.final_size),
-                )
-                stereo = self.alpha * new_stereo + (1 - self.alpha) * up_prev
-            else:
-                stereo = interp(
-                    self.toStereo[self.stage](out), (self.final_size, self.final_size)
-                )
-        return torch.tanh(stereo)
+        return x / torch.sqrt(torch.mean(x**2, dim=1, keepdim=True) + self.epsilon)
 
 
-class Critic(nn.Module):
-    def __init__(self, stage: Optional[int] = None, alpha: float = 1.0) -> None:
+class MiniBatchStdDev(nn.Module):
+    """Adds minibatch standard deviation as an additional feature map."""
+
+    def __init__(self) -> None:
         super().__init__()
-        # General settings
-        self.max_stage = ModelParams.MAX_STAGE
-        self.stage = stage if stage is not None else self.max_stage
-        self.alpha = alpha
-        self.final_size = int(
-            ModelParams.INITIAL_SIZE
-            * (ModelParams.GROWTH_FACTOR**ModelParams.MAX_STAGE)
-        )
-
-        # Initial preprocessing
-        channels = [128]
-        ch = 128
-        for i in range(1, self.max_stage + 1):
-            ch = max(ch // 2, 8)
-            channels.append(ch)
-        channels_rev = list(reversed(channels))
-        self.initial_conv = nn.Conv2d(
-            SignalConstants.CHANNELS, channels_rev[0], kernel_size=1
-        )
-
-        # Skip projection layers
-        self.fromStereo_skip = nn.ModuleList()
-        for i in range(len(channels_rev) - 1):
-            self.fromStereo_skip.append(
-                nn.Conv2d(channels_rev[i + 1], channels_rev[i], kernel_size=1)
-            )
-
-        # Feature extraction blocks
-        self.feature_extractor = nn.ModuleList()
-        for i in range(len(channels_rev) - 1):
-            extractor_block = nn.Sequential(
-                spectral_norm(
-                    nn.Conv2d(
-                        channels_rev[i], channels_rev[i], kernel_size=3, padding=1
-                    )
-                ),
-                nn.LeakyReLU(0.2),
-                spectral_norm(
-                    nn.Conv2d(
-                        channels_rev[i], channels_rev[i + 1], kernel_size=3, padding=1
-                    )
-                ),
-                nn.LeakyReLU(0.2),
-                nn.AvgPool2d(2),
-            )
-            self.feature_extractor.append(extractor_block)
-
-        # Attention bottleneck
-        final_in_channels = channels_rev[-1]
-        self.attention_block = nn.Sequential(
-            LinearAttention(final_in_channels),
-            nn.Conv2d(final_in_channels, final_in_channels, kernel_size=3, padding=1),
-            nn.LeakyReLU(0.2),
-        )
-
-        # Classifier layers
-        final_spatial = self.final_size // (2 ** len(self.feature_extractor))
-        self.classifier_layer = nn.Sequential(
-            nn.Conv2d(
-                final_in_channels + 1, final_in_channels, kernel_size=3, padding=1
-            ),
-            nn.LeakyReLU(0.2),
-            nn.Flatten(),
-            nn.Linear(final_in_channels * (final_spatial**2), 1),
-        )
-        self.minibatch_std = MiniBatchStdDev()
-
-    def extract_features(self, x: torch.Tensor) -> list:
-        x = interp(x, (self.final_size, self.final_size))
-        features = []
-        out = self.initial_conv(x)
-        features.append(out)
-        for extractor in self.feature_extractor:
-            out = extractor(out)
-            features.append(out)
-        out = self.attention_block(out)
-        features.append(out)
-        return features
-
-    def progress_step(self) -> None:
-        if self.alpha < 1.0:
-            self.alpha = min(
-                self.alpha
-                + ModelParams.GROWTH_FACTOR * (1.0 / ModelParams.FADE_IN_EPOCHS),
-                1.0,
-            )
-        elif self.stage < self.max_stage:
-            self.stage += 1
-            self.alpha = 0.0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = interp(x, (self.final_size, self.final_size))
-        out = self.initial_conv(x)
-        for extractor in self.feature_extractor:
-            out = extractor(out)
-        out = self.attention_block(out)
-        out = self.minibatch_std(out)
-        return self.classifier_layer(out)
+        std = torch.std(x, dim=0, unbiased=False)
+        mean_std = torch.mean(std)
+        shape = [x.shape[0], 1, *x.shape[2:]]
+        mean_std = mean_std.expand(shape)
+        return torch.cat([x, mean_std], dim=1)
 
 
 class LinearAttention(nn.Module):
+    """Self-attention mechanism with linear complexity."""
+
     def __init__(self, in_channels: int) -> None:
         super().__init__()
         self.reduced_channels = max(in_channels // 8, 1)
@@ -219,22 +59,203 @@ class LinearAttention(nn.Module):
         return self.gamma * out + x
 
 
-class PixelNorm(nn.Module):
-    def __init__(self, epsilon: float = 1e-8) -> None:
+# Style-based Components
+class MappingNetwork(nn.Module):
+    """Maps latent vectors to style vectors through multiple fully connected layers."""
+
+    def __init__(self, latent_dim, style_dim, num_layers=8):
         super().__init__()
-        self.epsilon = epsilon
+        layers = []
+        for i in range(num_layers):
+            in_features = latent_dim if i == 0 else style_dim
+            layers.append(nn.Linear(in_features, style_dim))
+            layers.append(nn.LeakyReLU(0.2))
+        self.mapping = nn.Sequential(*layers)
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        return self.mapping(z)
+
+
+class AdaIN(nn.Module):
+    """Adaptive Instance Normalization for style injection."""
+
+    def __init__(self, channels, style_dim):
+        super().__init__()
+        self.norm = nn.InstanceNorm2d(channels)
+        self.style_scale = nn.Linear(style_dim, channels)
+        self.style_shift = nn.Linear(style_dim, channels)
+
+    def forward(self, x: torch.Tensor, style: torch.Tensor) -> torch.Tensor:
+        normalized = self.norm(x)
+        scale = self.style_scale(style).unsqueeze(2).unsqueeze(3)
+        shift = self.style_shift(style).unsqueeze(2).unsqueeze(3)
+        return normalized * scale + shift
+
+
+class StyledConv(nn.Module):
+    """Convolution layer with style modulation and noise injection."""
+
+    def __init__(self, in_channels, out_channels, style_dim, kernel_size=3, padding=1):
+        super().__init__()
+        self.conv = spectral_norm(
+            nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding)
+        )
+        self.noise_weight = nn.Parameter(torch.zeros(1, out_channels, 1, 1))
+        self.adain = AdaIN(out_channels, style_dim)
+        self.lrelu = nn.LeakyReLU(0.2)
+
+    def forward(
+        self, x: torch.Tensor, style: torch.Tensor, noise: torch.Tensor = None
+    ) -> torch.Tensor:
+        out = self.conv(x)
+        noise = (
+            noise if noise is not None else torch.randn_like(out) * self.noise_weight
+        )
+        out = out + noise
+        out = self.lrelu(out)
+        return self.adain(out, style)
+
+
+class ToStereo(nn.Module):
+    """Converts features to stereo output with style modulation."""
+
+    def __init__(self, in_channels, style_dim):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, SignalConstants.CHANNELS, kernel_size=1)
+        self.adain = AdaIN(SignalConstants.CHANNELS, style_dim)
+
+    def forward(self, x: torch.Tensor, style: torch.Tensor) -> torch.Tensor:
+        out = self.conv(x)
+        return self.adain(out, style)
+
+
+class UpConvBlock(nn.Module):
+    """Upsampling block with styled convolutions."""
+
+    def __init__(self, in_channels: int, out_channels: int, style_dim: int) -> None:
+        super().__init__()
+        self.upsample = nn.Upsample(scale_factor=2, mode="bicubic")
+        self.conv1 = StyledConv(in_channels, out_channels, style_dim)
+        self.conv2 = StyledConv(out_channels, out_channels, style_dim)
+
+    def forward(self, x: torch.Tensor, style: torch.Tensor) -> torch.Tensor:
+        x = self.upsample(x)
+        x = self.conv1(x, style)
+        x = self.conv2(x, style)
+        return x
+
+
+# Main architecture
+class Generator(nn.Module):
+    def __init__(self, stage: Optional[int] = None, alpha: float = 1.0) -> None:
+        super().__init__()
+        style_dim = 512
+        self.max_stage = ModelParams.MAX_STAGE
+        self.stage = stage if stage is not None else self.max_stage
+        self.alpha = alpha
+
+        # Latent to style mapping network
+        self.mapping_network = MappingNetwork(ModelParams.LATENT_DIM, style_dim)
+
+        # Learned constant input
+        self.initial_channels = 128
+        self.initial_size = ModelParams.INITIAL_SIZE
+        self.constant = nn.Parameter(
+            torch.randn(1, self.initial_channels, self.initial_size, self.initial_size)
+        )
+        self.final_size = self.initial_size * (2**ModelParams.MAX_STAGE)
+
+        # toStereo layers for each training stage
+        self.toStereo_layers = nn.ModuleList()
+        self.toStereo_layers.append(ToStereo(self.initial_channels, style_dim))
+
+        # Progressive styled convolution blocks
+        self.blocks = nn.ModuleList()
+        in_channels = self.initial_channels
+        for i in range(1, self.max_stage + 1):
+            out_channels = max(in_channels // 2, 8)
+            block = UpConvBlock(in_channels, out_channels, style_dim)
+            self.blocks.append(block)
+            self.toStereo_layers.append(ToStereo(out_channels, style_dim))
+            in_channels = out_channels
+
+    def progress_step(self) -> None:
+        if self.stage < self.max_stage:
+            self.stage += 1
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        style = self.mapping_network(z)
+        out = self.constant.repeat(ModelParams.BATCH_SIZE, 1, 1, 1)
+
+        if self.stage == 0:
+            stereo = self.toStereo_layers[0](out, style)
+        else:
+            for i in range(self.stage):
+                out = self.blocks[i](out, style)
+            stereo = self.toStereo_layers[self.stage](out, style)
+        stereo = interp(stereo, (self.final_size, self.final_size))
+        return torch.tanh(stereo)
+
+
+class Critic(nn.Module):
+    """Progressive growing critic with minibatch discrimination."""
+
+    def __init__(self, stage: Optional[int] = None, alpha: float = 1.0) -> None:
+        super().__init__()
+        self.max_stage = ModelParams.MAX_STAGE
+        self.stage = stage if stage is not None else self.max_stage
+        self.alpha = alpha
+        self.final_size = int(
+            ModelParams.INITIAL_SIZE
+            * (ModelParams.GROWTH_FACTOR**ModelParams.MAX_STAGE)
+        )
+
+        # Initial convolution and downsampling
+        self.fromStereo = spectral_norm(
+            nn.Conv2d(SignalConstants.CHANNELS, 128, kernel_size=1)
+        )
+        self.down_blocks = nn.ModuleList()
+        in_channels = 128
+        for i in range(self.max_stage):
+            out_channels = min(in_channels * 2, 512)
+            block = nn.Sequential(
+                spectral_norm(
+                    nn.Conv2d(
+                        in_channels, out_channels, kernel_size=3, stride=2, padding=1
+                    )
+                ),
+                nn.LeakyReLU(0.2),
+            )
+            self.down_blocks.append(block)
+            in_channels = out_channels
+
+        # Attention block
+        self.attention_block = LinearAttention(in_channels)
+
+        # Feature extractor and classifier
+        self.feature_extractor = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.AvgPool2d(2),
+        )
+        self.minibatch_std = MiniBatchStdDev()
+        final_spatial = self.final_size // (2 ** (self.max_stage + 1))
+        self.classifier_layer = nn.Sequential(
+            nn.Flatten(), nn.Linear((in_channels + 1) * (final_spatial**2), 1)
+        )
+
+    def progress_step(self) -> None:
+        if self.stage < self.max_stage:
+            self.stage += 1
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x / torch.sqrt(torch.mean(x**2, dim=1, keepdim=True) + self.epsilon)
+        x = interp(x, (self.final_size, self.final_size))
+        out = self.fromStereo(x)
 
+        for block in self.down_blocks:
+            out = block(out)
 
-class MiniBatchStdDev(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        std = torch.std(x, dim=0, unbiased=False)
-        mean_std = torch.mean(std)
-        shape = [x.shape[0], 1, *x.shape[2:]]
-        mean_std = mean_std.expand(shape)
-        return torch.cat([x, mean_std], dim=1)
+        out = self.attention_block(out)
+        out = self.feature_extractor(out)
+        out = self.minibatch_std(out)
+        return self.classifier_layer(out)

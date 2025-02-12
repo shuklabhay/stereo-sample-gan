@@ -20,8 +20,7 @@ class ModelParams:
     # Model parameters
     DEVICE = "cuda:7"
     LATENT_DIM = 128
-    BATCH_SIZE = 64
-    DROPOUT_RATE = 0.10
+    BATCH_SIZE = 32
 
     # Training parameters
     CRITIC_STEPS = 5
@@ -34,7 +33,6 @@ class ModelParams:
     # PG-GAN parameters
     MAX_STAGE = 4
     INITIAL_SIZE = 16
-    FADE_IN_EPOCHS = 8
     GROWTH_FACTOR = 2.0
 
     # Model specific parameters

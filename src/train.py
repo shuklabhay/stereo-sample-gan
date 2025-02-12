@@ -1,56 +1,55 @@
 import torch
 import torch.nn.functional as F
 from architecture import Critic, Generator
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils.constants import model_selection
 from utils.evaluation import calculate_audio_metrics
 from utils.helpers import DataUtils, ModelParams, ModelUtils, SignalProcessing
 
-# Initialize parameters
+# Global initialization
 model_params = ModelParams()
 model_utils = ModelUtils(model_params.sample_length)
 signal_processing = SignalProcessing(model_params.sample_length)
 
 
-def compute_g_loss(generated_validity, generated_specs, real_specs):
+def compute_generator_loss(
+    generated_validity: torch.Tensor,
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
+) -> torch.Tensor:
+    """Compute total generator loss."""
     adversarial_loss = -torch.mean(generated_validity)
-    freq_energy = calculate_freq_energy(generated_specs, real_specs)
-    decay_loss = calculate_decay_loss(generated_specs, real_specs)
+    freq_loss = compute_frequency_loss(generated_specs, real_specs)
+    decay_loss = compute_decay_loss(generated_specs, real_specs)
+    spectral_loss = compute_multiscale_spectral_loss(generated_specs, real_specs)
+    stereo_loss = compute_stereo_coherence_loss(generated_specs, real_specs)
 
-    total_loss = adversarial_loss + 0.5 * freq_energy + 0.2 * decay_loss
-    return total_loss
+    return (
+        adversarial_loss
+        + 0.5 * freq_loss
+        + 0.2 * decay_loss
+        + 0.3 * spectral_loss
+        + 0.1 * stereo_loss
+    )
 
 
-def calculate_feature_match_diff(
-    critic: Critic, real_spec: torch.Tensor, generated_spec: torch.Tensor
+def compute_frequency_loss(
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
 ) -> torch.Tensor:
-    """Calculate feature match difference loss metric."""
-    real_features = critic.extract_features(real_spec)
-    generated_features = critic.extract_features(generated_spec)
-
-    loss = torch.tensor(0.0, device=real_spec.device)
-    for real_feat, generated_feat in zip(real_features, generated_features):
-        loss = loss + torch.mean(torch.abs(real_feat - generated_feat))
-
-    return loss / len(real_features)
-
-
-def calculate_freq_energy(
-    generated_specs: torch.Tensor, real_specs: torch.Tensor
-) -> torch.Tensor:
-    """Calculate l1 loss across spectrograms."""
-    # Calculate mean energy per frequency band; shapes assumed consistent.
+    """Calculate frequency-domain loss between spectrograms."""
     generated_freq_energy = torch.mean(generated_specs, dim=3)
     real_freq_energy = torch.mean(real_specs, dim=3)
     return F.l1_loss(generated_freq_energy, real_freq_energy)
 
 
-def calculate_decay_loss(
-    generated_specs: torch.Tensor, real_specs: torch.Tensor
+def compute_decay_loss(
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
 ) -> torch.Tensor:
-    """Follow original spec decay pattern."""
+    """Compute loss to follow original spectral decay pattern."""
     # Calculate mean energy per frame band
     generated_env = generated_specs.sum(dim=-1)
     real_env = real_specs.sum(dim=-1)
@@ -71,59 +70,111 @@ def calculate_decay_loss(
     return total_loss
 
 
-def compute_c_loss(
-    critic, generated_validity, real_validity, generated_spec, real_spec, training
-):
-    wasserstein_dist = calculate_wasserstein_diff(real_validity, generated_validity)
-    spectral_diff = calculate_spectral_diff(real_spec, generated_spec)
-    spectral_convergence = calculate_spectral_convergence_diff(
-        real_spec, generated_spec
-    )
+def compute_multiscale_spectral_loss(
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
+) -> torch.Tensor:
+    """Compute L1 loss between spectrograms at multiple scales."""
+    scales = [1, 2, 4]
+    total_loss = 0.0
+    for scale in scales:
+        if scale > 1:
+            gen_scaled = torch.nn.functional.avg_pool2d(
+                generated_specs, kernel_size=scale, stride=scale
+            )
+            real_scaled = torch.nn.functional.avg_pool2d(
+                real_specs, kernel_size=scale, stride=scale
+            )
+        else:
+            gen_scaled = generated_specs
+            real_scaled = real_specs
+        total_loss += torch.nn.functional.l1_loss(gen_scaled, real_scaled)
+    return total_loss / len(scales)
+
+
+def compute_stereo_coherence_loss(
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
+    bottom_bins: int = 30,
+) -> torch.Tensor:
+    """Compute loss to encourage appropriate stereo coherence."""
+    # Force exact match on bottom lower f_bins
+    gen_bottom = generated_specs[..., :bottom_bins]
+    left_gen_bottom = gen_bottom[:, 0]
+    right_gen_bottom = gen_bottom[:, 1]
+    bottom_loss = torch.nn.functional.l1_loss(left_gen_bottom, right_gen_bottom)
+
+    # Match variation on upper f_bins
+    gen_upper = generated_specs[..., bottom_bins:]
+    real_upper = real_specs[..., bottom_bins:]
+    left_gen_upper = gen_upper[:, 0]
+    right_gen_upper = gen_upper[:, 1]
+    left_real_upper = real_upper[:, 0]
+    right_real_upper = real_upper[:, 1]
+    upper_target = torch.abs(left_real_upper - right_real_upper)
+    upper_diff = torch.abs(left_gen_upper - right_gen_upper)
+    upper_loss = torch.nn.functional.l1_loss(upper_diff, upper_target)
+
+    return bottom_loss + upper_loss
+
+
+def compute_critic_loss(
+    critic: Critic,
+    generated_validity: torch.Tensor,
+    real_validity: torch.Tensor,
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
+    training: bool,
+) -> torch.Tensor:
+    """Compute total critic loss."""
+    wasserstein_loss = compute_wasserstein_loss(generated_validity, real_validity)
+    spectral_loss = compute_spectral_loss(generated_specs, real_specs)
+    convergence_loss = compute_spectral_convergence_loss(generated_specs, real_specs)
+
+    loss = wasserstein_loss + 0.3 * spectral_loss + 0.3 * convergence_loss
 
     if training:
-        gradient_penalty = calculate_gradient_penalty(critic, real_spec, generated_spec)
-        return (
-            wasserstein_dist
-            + model_params.LAMBDA_GP * gradient_penalty
-            + 0.3 * spectral_diff
-            + 0.3 * spectral_convergence
-        )
-
-    return wasserstein_dist + 0.3 * spectral_diff + 0.3 * spectral_convergence
+        gradient_penalty = compute_gradient_penalty(critic, real_specs, generated_specs)
+        loss += model_params.LAMBDA_GP * gradient_penalty
+    return loss
 
 
-def calculate_wasserstein_diff(
-    real_validity: torch.Tensor, generated_validity: torch.Tensor
+def compute_wasserstein_loss(
+    generated_validity: torch.Tensor,
+    real_validity: torch.Tensor,
 ) -> torch.Tensor:
-    """Calculate wasserstien loss metric."""
+    """Calculate Wasserstein distance between real and generated samples."""
     return torch.mean(generated_validity) - torch.mean(real_validity)
 
 
-def calculate_spectral_diff(
-    real_spec: torch.Tensor, generated_spec: torch.Tensor
+def compute_spectral_loss(
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
 ) -> torch.Tensor:
-    return torch.mean(torch.abs(real_spec - generated_spec))
+    """Compute L1 loss between spectrograms."""
+    return torch.mean(torch.abs(real_specs - generated_specs))
 
 
-def calculate_spectral_convergence_diff(
-    real_spec: torch.Tensor, generated_spec: torch.Tensor
+def compute_spectral_convergence_loss(
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
 ) -> torch.Tensor:
-    numerator = torch.norm(generated_spec - real_spec, p=2)
-    denominator = torch.norm(real_spec, p=2) + 1e-8
+    """Compute spectral convergence loss between spectrograms."""
+    numerator = torch.norm(generated_specs - real_specs, p=2)
+    denominator = torch.norm(real_specs, p=2) + 1e-8
     return numerator / denominator
 
 
-def calculate_gradient_penalty(
+def compute_gradient_penalty(
     critic: Critic,
-    real_samples: torch.Tensor,
-    generated_samples: torch.Tensor,
+    generated_specs: torch.Tensor,
+    real_specs: torch.Tensor,
 ) -> torch.Tensor:
-    batch_size = real_samples.size(0)
-    # Removed upsampling logic; the critic guarantees compatible spatial dimensions.
-    alpha = torch.rand(batch_size, 1, 1, 1).to(model_params.DEVICE)
-    interpolates = (
-        real_samples * alpha + generated_samples * (1 - alpha)
-    ).requires_grad_(True)
+    """Compute gradient penalty for WGAN-GP."""
+    alpha = torch.rand(model_params.BATCH_SIZE, 1, 1, 1).to(model_params.DEVICE)
+    interpolates = (real_specs * alpha + generated_specs * (1 - alpha)).requires_grad_(
+        True
+    )
     c_interpolates = critic(interpolates)
     gradients = torch.autograd.grad(
         outputs=c_interpolates,
@@ -132,7 +183,7 @@ def calculate_gradient_penalty(
         create_graph=True,
         retain_graph=True,
     )[0]
-    gradients = gradients.view(batch_size, -1)
+    gradients = gradients.view(model_params.BATCH_SIZE, -1)
     gradient_norm = gradients.norm(2, dim=1)
     return ((gradient_norm - 1) ** 2).mean()
 
@@ -141,17 +192,17 @@ def train_epoch(
     generator: Generator,
     critic: Critic,
     dataloader: DataLoader,
-    optimizer_G: torch.optim.Adam,
-    optimizer_C: torch.optim.Adam,
+    optimizer_G: torch.optim.Optimizer,
+    optimizer_C: torch.optim.Optimizer,
     epoch_number: int,
-) -> dict[str, int | float]:
-    """Training."""
+) -> dict[str, float]:
+    """Train one GAN epoch."""
     # Prepare loop
     generator.train()
     critic.train()
     total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
 
-    # Loop
+    # Training loop
     for i, (real_spec,) in tqdm(
         enumerate(dataloader),
         total=len(dataloader),
@@ -168,7 +219,7 @@ def train_epoch(
             real_validity = critic(real_spec)
             fake_validity = critic(generated_spec.detach())
 
-            c_loss = compute_c_loss(
+            c_loss = compute_critic_loss(
                 critic,
                 fake_validity,
                 real_validity,
@@ -181,7 +232,7 @@ def train_epoch(
             optimizer_C.step()
 
             total_c_loss += c_loss.item()
-            w_dist = calculate_wasserstein_diff(real_validity, fake_validity)
+            w_dist = compute_wasserstein_loss(real_validity, fake_validity)
             total_w_dist += w_dist.item()
 
         # Train generator
@@ -193,7 +244,9 @@ def train_epoch(
 
             generated_spec = generator(z)
             generated_validity = critic(generated_spec)
-            g_loss = compute_g_loss(generated_validity, generated_spec, real_spec)
+            g_loss = compute_generator_loss(
+                generated_validity, generated_spec, real_spec
+            )
 
             g_loss.backward()
             torch.nn.utils.clip_grad_norm_(generator.parameters(), 1.0)
@@ -218,15 +271,15 @@ def validate(
     critic: Critic,
     dataloader: DataLoader,
     epoch_number: int,
-) -> dict[str, int | float | torch.Tensor]:
-    """Validation loop."""
+) -> dict[str, float | torch.Tensor]:
+    """Execute validation pass."""
     # Prepare loop
     generator.eval()
     critic.eval()
     total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
     total_fad, total_is, total_kid = 0.0, 0.0, 0.0
 
-    # Val loop
+    # Validation loop
     with torch.no_grad():
         for _, (real_spec,) in tqdm(
             enumerate(dataloader),
@@ -243,8 +296,10 @@ def validate(
             real_validity = critic(real_spec)
             generated_validity = critic(generated_spec)
 
-            g_loss = compute_g_loss(generated_validity, generated_spec, real_spec)
-            c_loss = compute_c_loss(
+            g_loss = compute_generator_loss(
+                generated_validity, generated_spec, real_spec
+            )
+            c_loss = compute_critic_loss(
                 critic,
                 generated_validity,
                 real_validity,
@@ -257,7 +312,7 @@ def validate(
 
             total_g_loss += g_loss.item()
             total_c_loss += c_loss.item()
-            total_w_dist += calculate_wasserstein_diff(
+            total_w_dist += compute_wasserstein_loss(
                 real_validity, generated_validity
             ).item()
             total_fad += metrics["fad"]
@@ -277,40 +332,23 @@ def validate(
 
 
 def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
-    """Training loop."""
+    """Execute complete training loop."""
     print("Starting training for", model_params.selected_model)
     # Initialize models
     generator = Generator(stage=0)
     critic = Critic(stage=0)
 
-    optimizer_G = torch.optim.RMSprop(
+    optimizer_G = torch.optim.AdamW(
         generator.parameters(),
         lr=model_params.LR_G,
         weight_decay=0.02,
+        betas=(0.0, 0.99),
     )
-    optimizer_C = torch.optim.RMSprop(
-        critic.parameters(),
-        lr=model_params.LR_C,
-        weight_decay=0.02,
+    optimizer_C = torch.optim.AdamW(
+        critic.parameters(), lr=model_params.LR_C, weight_decay=0.02, betas=(0.0, 0.99)
     )
-
-    # New schedulers with OneCycleLR
-    scheduler_G = OneCycleLR(
-        optimizer_G,
-        max_lr=model_params.LR_G,
-        total_steps=len(train_loader) * model_params.N_EPOCHS,
-        pct_start=0.2,
-        div_factor=15,
-        final_div_factor=1e4,
-    )
-    scheduler_C = OneCycleLR(
-        optimizer_C,
-        max_lr=model_params.LR_C,
-        total_steps=len(train_loader) * model_params.N_EPOCHS,
-        pct_start=0.2,
-        div_factor=15,
-        final_div_factor=1e4,
-    )
+    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.1, patience=5)
+    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.1, patience=5)
 
     generator.to(model_params.DEVICE)
     critic.to(model_params.DEVICE)
@@ -336,9 +374,11 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
         # Validate
         val_metrics = validate(generator, critic, val_loader, epoch)
 
-        # Step schedulers
-        scheduler_G.step()
-        scheduler_C.step()
+        # Step scheduler and models
+        scheduler_G.step(val_metrics["fad"])
+        scheduler_C.step(val_metrics["fad"])
+        generator.progress_step()
+        critic.progress_step()
 
         # Print information
         print(
@@ -348,12 +388,8 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             f"VAL g_loss: {val_metrics['g_loss']:.4f} c_loss: {val_metrics['c_loss']:.4f} w_dist: {val_metrics['w_dist']:.4f}"
         )
         print(
-            f"VAL FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f}"
+            f"VAL FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f}"
         )
-
-        # Step progressive growing models
-        generator.progress_step()
-        critic.progress_step()
 
         # End of epoch handling
         if val_metrics["fad"] < best_metrics["fad"]:
@@ -363,12 +399,12 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             epochs_no_improve = 0
             DataUtils.visualize_spectrogram_grid(
                 val_metrics["val_specs"],
-                f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KIS: {val_metrics['kid']:.4f} - Stage {generator.stage}/{ModelParams.MAX_STAGE}",
+                f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f}",
                 f"static/{model_selection.name.lower()}_best_val_spectrograms.png",
             )
             model_utils.save_model(generator)
             print(
-                f"New best model saved with metrics - FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f}"
+                f"New best model saved with metrics - FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f} -- Stage {generator.stage}/{ModelParams.MAX_STAGE}"
             )
         else:
             epochs_no_improve += 1
