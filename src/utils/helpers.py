@@ -225,29 +225,26 @@ class SignalProcessing:
         self, stereo_norm_mel_spec: NDArray[np.float32]
     ) -> NDArray[np.float32]:
         """Convert normalized decibel output to raw audio."""
-        stereo_audio = []
-        for norm_mel_spec in stereo_norm_mel_spec:
-            norm_mel_spec = norm_mel_spec.T  # (mel_bins, frames)
-            db_mel_spec = DataUtils.scale_data_to_range(norm_mel_spec, -80, 0)
-            power_mel_spec = librosa.db_to_power(db_mel_spec)
-            linear_spec = librosa.feature.inverse.mel_to_stft(
-                M=power_mel_spec,
-                sr=self.constants.SR,
-                n_fft=self.constants.FT_WIN,
-                power=1.0,
-            )
-            audio = librosa.griffinlim(
-                S=linear_spec,
-                n_iter=100,
-                hop_length=self.constants.FT_HOP,
-                win_length=self.constants.FT_WIN,
-                window=self.constants.WINDOW,
-                momentum=0.5,
-                init="random",
-            )
-            stereo_audio.append(audio)
+        norm_mel_spec = stereo_norm_mel_spec.transpose(0, 2, 1)  # (mel_bins, frames)
+        db_mel_spec = DataUtils.scale_data_to_range(norm_mel_spec, -80, 0)
+        power_mel_spec = librosa.db_to_power(db_mel_spec)
+        linear_spec = librosa.feature.inverse.mel_to_stft(
+            M=power_mel_spec,
+            sr=self.constants.SR,
+            n_fft=self.constants.FT_WIN,
+            power=1.0,
+        )
+        audio = librosa.griffinlim(
+            S=linear_spec,
+            n_iter=100,
+            hop_length=self.constants.FT_HOP,
+            win_length=self.constants.FT_WIN,
+            window=self.constants.WINDOW,
+            momentum=0.5,
+            init="random",
+        )
 
-        audio_final = librosa.util.normalize(np.array(stereo_audio), axis=1)
+        audio_final = librosa.util.normalize(np.array(audio), axis=1)
         audio_final = self.fade_out_stereo_audio(audio_final)
         return audio_final
 

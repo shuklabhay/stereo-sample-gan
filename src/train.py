@@ -28,7 +28,7 @@ def compute_generator_loss(
 
     return (
         adversarial_loss
-        + 0.5 * freq_loss
+        + 0.6 * freq_loss
         + 0.2 * decay_loss
         + 0.3 * spectral_loss
         + 0.1 * stereo_loss
@@ -95,27 +95,26 @@ def compute_multiscale_spectral_loss(
 def compute_stereo_coherence_loss(
     generated_specs: torch.Tensor,
     real_specs: torch.Tensor,
-    bottom_bins: int = 30,
+    lowband_cutoff: int = 30,
 ) -> torch.Tensor:
-    """Compute loss to encourage appropriate stereo coherence."""
-    # Force exact match on bottom lower f_bins
-    gen_bottom = generated_specs[..., :bottom_bins]
-    left_gen_bottom = gen_bottom[:, 0]
-    right_gen_bottom = gen_bottom[:, 1]
-    bottom_loss = torch.nn.functional.l1_loss(left_gen_bottom, right_gen_bottom)
+    """Compute stereo coherence loss across frequency bands."""
+    # Split into left/right channels
+    left_gen, right_gen = generated_specs[:, 0], generated_specs[:, 1]
+    left_real, right_real = real_specs[:, 0], real_specs[:, 1]
 
-    # Match variation on upper f_bins
-    gen_upper = generated_specs[..., bottom_bins:]
-    real_upper = real_specs[..., bottom_bins:]
-    left_gen_upper = gen_upper[:, 0]
-    right_gen_upper = gen_upper[:, 1]
-    left_real_upper = real_upper[:, 0]
-    right_real_upper = real_upper[:, 1]
-    upper_target = torch.abs(left_real_upper - right_real_upper)
-    upper_diff = torch.abs(left_gen_upper - right_gen_upper)
-    upper_loss = torch.nn.functional.l1_loss(upper_diff, upper_target)
+    # Compute stereo difference tensors
+    gen_diff = left_gen - right_gen
+    real_diff = left_real - right_real
 
-    return bottom_loss + upper_loss
+    # Enford mono lowend
+    lowband_loss = torch.mean(torch.abs(gen_diff[..., :lowband_cutoff, :]))
+
+    # Match high band stereo spread
+    highband_diff = torch.abs(gen_diff[..., lowband_cutoff:, :])
+    target_diff = torch.abs(real_diff[..., lowband_cutoff:, :])
+    highband_loss = F.l1_loss(highband_diff, target_diff)
+
+    return lowband_loss + highband_loss
 
 
 def compute_critic_loss(
@@ -347,8 +346,8 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     optimizer_C = torch.optim.AdamW(
         critic.parameters(), lr=model_params.LR_C, weight_decay=0.02, betas=(0.0, 0.99)
     )
-    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.1, patience=5)
-    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.1, patience=5)
+    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.1, patience=3)
+    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.1, patience=3)
 
     generator.to(model_params.DEVICE)
     critic.to(model_params.DEVICE)

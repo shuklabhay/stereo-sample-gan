@@ -184,8 +184,9 @@ class Generator(nn.Module):
             self.stage += 1
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
+        batch = z.shape[0]
         style = self.mapping_network(z)
-        out = self.constant.repeat(ModelParams.BATCH_SIZE, 1, 1, 1)
+        out = self.constant.repeat(batch, 1, 1, 1)
 
         if self.stage == 0:
             stereo = self.toStereo_layers[0](out, style)
