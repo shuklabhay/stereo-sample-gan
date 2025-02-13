@@ -346,8 +346,8 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
     optimizer_C = torch.optim.AdamW(
         critic.parameters(), lr=model_params.LR_C, weight_decay=0.02, betas=(0.0, 0.99)
     )
-    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.1, patience=3)
-    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.1, patience=3)
+    scheduler_G = ReduceLROnPlateau(optimizer_G, mode="min", factor=0.1, patience=5)
+    scheduler_C = ReduceLROnPlateau(optimizer_C, mode="min", factor=0.1, patience=5)
 
     generator.to(model_params.DEVICE)
     critic.to(model_params.DEVICE)
