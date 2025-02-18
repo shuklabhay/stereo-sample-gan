@@ -1,13 +1,12 @@
-import numpy as np
-import scipy.signal
 import torch
 import torch.nn.functional as F
 import torchaudio
 from torchaudio.prototype.pipelines import VGGISH
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.kid import KernelInceptionDistance
+
 from utils.constants import ModelParams
-from utils.helpers import DataUtils, ModelParams, SignalProcessing
+from utils.helpers import DataUtils, ModelParams
 
 
 def calculate_audio_metrics(
@@ -112,29 +111,3 @@ def calculate_kernel_inception_distance(
     kid.update(generated_rgb, real=False)
     kid_mean, _ = kid.compute()
     return kid_mean.item()
-
-
-def calculate_phase_coherence(generated_specs: torch.Tensor) -> float:
-    """
-    Computes left-right channel phase coherence for each generated sample,
-    """
-    sample_length = ModelParams().sample_length
-    signal_processing = SignalProcessing(sample_length)
-    phase_diffs = []
-    for spec in generated_specs:
-        # Convert to numpy audio
-        audio = signal_processing.norm_spec_to_audio(spec.detach().numpy())
-        left = audio[0]
-        right = audio[1]
-
-        # Extract phase
-        left_phase = np.angle(scipy.signal.hilbert(left))
-        right_phase = np.angle(scipy.signal.hilbert(right))
-
-        # Calculate absolute phase difference
-        diff = np.abs(left_phase - right_phase)
-        diff_deg = np.degrees(diff)
-        phase_diffs.append(diff_deg.cpu())
-
-    avg_phase_diff_deg = np.mean(phase_diffs)
-    return float(avg_phase_diff_deg)
