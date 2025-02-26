@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
+
 from utils.helpers import ModelParams, SignalConstants
 
 
@@ -105,7 +106,7 @@ class StyledConv(nn.Module):
         self.lrelu = nn.LeakyReLU(0.2)
 
     def forward(
-        self, x: torch.Tensor, style: torch.Tensor, noise: torch.Tensor = None
+        self, x: torch.Tensor, style: torch.Tensor, noise: torch.Tensor | None = None
     ) -> torch.Tensor:
         out = self.conv(x)
         noise = (

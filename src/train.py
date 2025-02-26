@@ -1,9 +1,10 @@
 import torch
 import torch.nn.functional as F
-from architecture import Critic, Generator
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from architecture import Critic, Generator
 from utils.constants import model_selection
 from utils.evaluation import calculate_audio_metrics
 from utils.helpers import DataUtils, ModelParams, ModelUtils, SignalProcessing
@@ -73,7 +74,7 @@ def compute_decay_loss(
 def compute_multiscale_spectral_loss(
     generated_specs: torch.Tensor,
     real_specs: torch.Tensor,
-) -> torch.Tensor:
+) -> float:
     """Compute L1 loss between spectrograms at multiple scales."""
     scales = [1, 2, 4]
     total_loss = 0.0
@@ -88,7 +89,7 @@ def compute_multiscale_spectral_loss(
         else:
             gen_scaled = generated_specs
             real_scaled = real_specs
-        total_loss += torch.nn.functional.l1_loss(gen_scaled, real_scaled)
+        total_loss += torch.nn.functional.l1_loss(gen_scaled, real_scaled).item()
     return total_loss / len(scales)
 
 

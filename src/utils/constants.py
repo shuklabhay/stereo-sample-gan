@@ -18,7 +18,7 @@ model_selection = ModelType.SNARE
 @dataclass
 class ModelParams:
     # Model parameters
-    DEVICE = "cuda:7"
+    DEVICE = "cpu"
     LATENT_DIM = 128
     BATCH_SIZE = 32
 
