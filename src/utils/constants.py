@@ -2,15 +2,14 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 
+import librosa
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal.windows import hann
 
 
 class ModelType(Enum):
     KICKDRUM = "Kickdrum"
     SNARE = "Snare"
-    CHORDSHOT = "ChordShot"
 
 
 model_selection = ModelType.SNARE
@@ -18,14 +17,29 @@ model_selection = ModelType.SNARE
 
 @dataclass
 class ModelParams:
+    # Model parameters
+    DEVICE = "cpu"
     LATENT_DIM = 128
-    BATCH_SIZE = 16
-    DROPOUT_RATE = 0.2
+    BATCH_SIZE = 32
 
+    # Training parameters
+    CRITIC_STEPS = 5
+    LR_G = 2e-4
+    LR_C = 4e-4
+    LAMBDA_GP = 10
+    N_EPOCHS = 50
+    PATIENCE = 10
+
+    # PG-GAN parameters
+    MAX_STAGE = 4
+    INITIAL_SIZE = 16
+    GROWTH_FACTOR = 2.0
+
+    # Model specific parameters
     def __init__(self):
         self.load_params()
 
-        self.outputs_dir = "outputs"
+        self.outputs_dir = "static"
         self.compiled_data_path = "data/compiled_data.npy"
         self.generated_audio_name = "generated_audio"
         self.visualize_generated = True
@@ -54,24 +68,6 @@ class ModelParams:
         self.training_audio_dir = selected_model["train_data_dir"]
 
 
-@dataclass
-class TrainingParams:
-    LR_G = 0.003
-    LR_C = 0.004
-    LR_DECAY = 0.9
-    LAMBDA_GP = 5
-    CRITIC_STEPS = 5
-    N_EPOCHS = 20
-
-    @property
-    def SHOW_GENERATED_INTERVAL(self) -> int:
-        return int(self.N_EPOCHS / 4)
-
-    @property
-    def SAVE_INTERVAL(self) -> int:
-        return int(self.N_EPOCHS / 1)
-
-
 class SignalConstants:
     # Signal data dimensions
     SR = 44100
@@ -89,8 +85,8 @@ class SignalConstants:
         return int(self.SR / 2)
 
     @property
-    def WINDOW(self) -> NDArray[np.float64]:
-        return hann(self.FT_WIN)
+    def WINDOW(self) -> NDArray[np.float32]:
+        return librosa.filters.get_window("hann", self.FT_WIN, fftbins=True)
 
     @property
     def FT_WIN(self) -> int:
@@ -98,4 +94,7 @@ class SignalConstants:
 
     @property
     def FT_HOP(self) -> int:
-        return int(self.sample_length * self.SR) // self.FRAMES
+        total_samples = int(self.sample_length * self.SR)
+        hop = (total_samples - self.FT_WIN) // (self.FRAMES - 1)
+        return hop
+        return hop
