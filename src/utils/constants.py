@@ -97,4 +97,3 @@ class SignalConstants:
         total_samples = int(self.sample_length * self.SR)
         hop = (total_samples - self.FT_WIN) // (self.FRAMES - 1)
         return hop
-        return hop
