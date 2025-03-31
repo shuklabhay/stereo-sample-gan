@@ -37,9 +37,11 @@ class DataUtils:
         return y
 
     @staticmethod
-    def save_audio(audio_path: str, audio: NDArray[np.float32]) -> None:
+    def save_audio(audio_path: str, audio: NDArray) -> None:
         """Save raw audio as audio."""
-        sf.write(audio_path, audio.T, SignalConstants.SR)
+        # Ensure audio is float32
+        audio_float32 = audio.astype(np.float32)
+        sf.write(audio_path, audio_float32.T, SignalConstants.SR)
 
     @staticmethod
     def scale_data_to_range(
@@ -93,10 +95,11 @@ class DataUtils:
             ax.axis("off")
 
         # Add label bar to the right
-        cax = fig.add_axes([0.88, 0.1, 0.02, 0.8])
+        cax = fig.add_axes((0.88, 0.1, 0.02, 0.8))
         cbar = fig.colorbar(im, cax=cax)
         cbar.set_label("Intensity (Normalized dB)", rotation=270, labelpad=10)
-        cbar.outline.set_visible(False)
+        for spine in cbar.ax.spines.values():
+            spine.set_visible(False)
 
         # Save and close
         plt.savefig(save_path, bbox_inches="tight", pad_inches=0.25)
@@ -112,7 +115,7 @@ class DataUtils:
             freq = np.random.uniform(0, 20000)
             audio_wave = amplitude * np.sin(2 * np.pi * freq * t)
             sample_count = int(sample_length * SignalConstants.SR)
-            audio_signal = np.zeros(sample_count)
+            audio_signal = np.zeros(sample_count, dtype=np.float32)
 
             audio_wave = audio_wave[:sample_count]
             audio_signal[:] = audio_wave
@@ -136,20 +139,31 @@ class ModelUtils:
             self.params.model_save_path,
         )
 
-    def load_model(self, model_save_path: str, device: torch.device) -> None:
+    def load_model(self, model_save_path: str, device: str) -> None:
         """Load model from .pth file."""
+        # Convert string to torch.device
+        torch_device = torch.device(device)
         self.generator.load_state_dict(
             torch.load(
                 model_save_path,
-                map_location=device,
+                map_location=torch_device,
                 weights_only=False,
             )
         )
         self.generator.eval()
 
-    def generate_audio(self, model_save_path: str, generation_count: int = 2) -> None:
+    def generate_audio(
+        self,
+        model_save_path: str,
+        generation_count: int = 2,
+        output_path: str | None = None,
+    ) -> None:
         """Generate audio with saved model."""
         self.load_model(model_save_path, ModelParams.DEVICE)
+
+        # Use default output path if none provided
+        if output_path is None:
+            output_path = self.params.outputs_dir
 
         # Generate audio
         z = torch.randn(generation_count, ModelParams.LATENT_DIM)
@@ -163,7 +177,7 @@ class ModelUtils:
             current_sample = generated_output[i]
             audio_info = self.signal_processing.norm_spec_to_audio(current_sample)
             audio_save_path = os.path.join(
-                self.params.outputs_dir,
+                output_path,
                 f"{self.params.generated_audio_name}_{i + 1}.wav",
             )
             DataUtils.save_audio(audio_save_path, audio_info)
@@ -249,7 +263,7 @@ class SignalProcessing:
         return audio_final
 
     def encode_sample_directory(
-        self, sample_dir: str, selected_model: str, output_dir: str = None
+        self, sample_dir: str, selected_model: str, output_dir: str = "outputs"
     ) -> torch.Tensor:
         """Encode sample directory as mel spectrograms."""
         DataUtils.delete_DSStore(sample_dir)

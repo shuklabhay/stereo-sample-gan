@@ -2,69 +2,76 @@
 
 [![On Push](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)
 
-StereoSampleGAN: A computationally inexpensive approach high fidelity stereo audio sample generation.
+StereoSampleGAN: A computationally inexpensive approach to high fidelity stereo audio sample generation.
+
+## Pretrained Models
+
+### Kick Drum
+
+Kick drum generation model trained on curated kick drum samples.
+
+Original training data:
+![Kick drum training data visualization](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/kickdrum_data_visualization.png)
+
+Generated samples:
+![Kick drum model generated examples](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/kickdrum_best_val_spectrograms.png)
+
+### Snare Drum
+
+Snare drum generation model, focused on producing punchy, tight snare sounds.
+
+Original training data:
+![Snare drum training data visualization](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/snare_data_visualization.png)
+
+Generated samples:
+![Snare drum model generated examples](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/snare_best_val_spectrograms.png)
 
 ## Model Usage
 
-### 1. Prereqs
+### 1. Prerequisites
 
-- Optional but highly reccomended: Set up a [Python virtual environment.](https://docs.python.org/3/library/venv.html)
+- Optional but highly recommended: Set up a [Python virtual environment.](https://docs.python.org/3/library/venv.html)
   - Audio loader package `librosa` requires an outdated version of Numpy
 - Install requirements by running `pip3 install -r requirements.txt`
 
 ### 2. Generate audio from pretrained models
 
-Specify sample count to generate, output, etc `usage_params.py`
+Use the generation script with command line arguments:
 
-- Generate audio from the Curated Kick model by running `python3 src/run_pretrained/generate_curated_kick.py`
-- Generate audio from the Diverse Kick model by running `python3 src/run_pretrained/generate_diverse_kick.py`
-- Generate audio from the Instrument One Shot model by running `python3 src/run_pretrained/generate_instrument_one_shot.py`
+```bash
+# Generate 2 kick drum samples with default output path
+python src/generate.py --type kick --count 2
 
-### 3. Train model
+# Generate 5 snare samples with custom output path
+python src/generate.py --type snare --count 5 --output_path my_samples
+```
 
-Specify training data paramaters in `usage_params.py`
+Parameters:
 
-- I reccomend anywhere between 4,000-8000 training examples, any multiple of 8 and audio
-  <1.5 sec long (longer hasn't been fully tested)
-- Prepare training data by running `python3 src/data_processing/encode_audio_data.py`
-- Train model by running `python3 src/stereo_sample_gan.py`
-- Generate audio (based on current `usage_params.py`) by running `python3 src/generate.py`
+- `--type`: Type of audio to generate (`kick` or `snare`)
+- `--count`: Number of samples to generate (integer value)
+- `--output_path`: Directory to save generated audio files (default: "outputs")
 
-Training progress visualization (training Diverse Kick Drum Model):
+## Technical Approach
 
-<img src="static/diverse_kick_training_progress.gif" alt="Diverse kick training progress" width="400">
+StereoSampleGAN combines these audio generation techniques:
 
-## Pretrained Models
+- **Mel-Spectrogram Representation**: For efficient learning of frequency patterns
+- **Progressive Growing**: Training on increasingly higher resolution spectrograms
+- **Style-Based Generation**: Using StyleGAN for better style control
+- **Multi-Scale Spectral Losses**: Specialized frequency, decay, and coherence losses
+- **Griffin-Lim Reconstruction**: Converting spectrograms back to audio
 
-### Diverse Kick Drum
+## Custom Training
 
-Kick drum generation model trained on ~8000 essentially random kick drums.
+To train on your own audio samples:
 
-- More variation between each generated sample, audio is occasionally inconsistent and noisy.
+1. Collect one-shot audio samples (<1.5 seconds each)
+2. Update the model parameters in `src/utils/model_params.json`
+3. Encode your samples with `src/data_processing/encode_audio_data.py`
+4. Train with `src/stereo_sample_gan.py`
+5. Generate new samples with the unified generation script
 
-<img src="static/diverse_kick_generated_examples.png" alt="Diverse kick model generated examples" width="800">
+## License
 
-### Curated Kick Drum
-
-Kick drum generation model trained on ~4400 kick drums with closer matching overall characteristics.
-
-- Less variation between each drum sample's decay and auditory tone.
-
-<img src="static/curated_kick_generated_examples.png" alt="Curated kick model generated examples" width="800">
-
-### Instrument One Shot
-
-Instrument one shot generation model, trained on ~3000 semi-curated instrument one shots.
-
-- Demonstrates model's capability to generate longer audio, yet fails to generate coherent and useable instrument one shots.
-
-<img src="static/instrument_one_shot_generated_examples.png" alt="Instrument one shot model generated examples" width="800">
-
-## Directories
-
-- `outputs`: Trained model and generated audio
-- `paper`: Research paper / model writeup
-- `static`: Static resources
-- `src`: Model source code
-  - `utils`: Model and data utilities
-  - `data_processing`: Training data processing scripts
+This project is licensed under the MIT License - see the LICENSE file for details.
