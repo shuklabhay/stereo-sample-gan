@@ -170,10 +170,11 @@ class ModelUtils:
         with torch.no_grad():
             generated_output = self.generator(z).squeeze().numpy()
 
-        print("Generated output shape:", generated_output.shape)
-
         # Visualize and save audio
-        for i in range(generation_count):
+        for i in tqdm(
+            range(generation_count),
+            desc=f"Generating audio",
+        ):
             current_sample = generated_output[i]
             audio_info = self.signal_processing.norm_spec_to_audio(current_sample)
             audio_save_path = os.path.join(
@@ -239,8 +240,21 @@ class SignalProcessing:
         self, stereo_norm_mel_spec: NDArray[np.float32]
     ) -> NDArray[np.float32]:
         """Convert normalized decibel output to raw audio."""
-        norm_mel_spec = stereo_norm_mel_spec.transpose(0, 2, 1)  # (mel_bins, frames)
-        db_mel_spec = DataUtils.scale_data_to_range(norm_mel_spec, -80, 0)
+        # Pad spectrograms
+        padding_frames = 8
+        stereo_padded_specs = []
+        for channel_spec in stereo_norm_mel_spec:
+            padded_spec = np.pad(
+                channel_spec,
+                pad_width=((0, padding_frames), (0, 0)),
+                mode="linear_ramp",
+                end_values=0,
+            )
+            stereo_padded_specs.append(padded_spec)
+
+        # Convert padded spectrograms to audio
+        padded_mel_spec = np.array(stereo_padded_specs).transpose(0, 2, 1)
+        db_mel_spec = DataUtils.scale_data_to_range(padded_mel_spec, -80, 0)
         power_mel_spec = librosa.db_to_power(db_mel_spec)
         linear_spec = librosa.feature.inverse.mel_to_stft(
             M=power_mel_spec,
@@ -256,10 +270,16 @@ class SignalProcessing:
             window=self.constants.WINDOW,
             momentum=0.5,
             init="random",
+            center=True,
+            pad_mode="reflect",
         )
-
         audio_final = librosa.util.normalize(np.array(audio), axis=1)
         audio_final = self.fade_out_stereo_audio(audio_final)
+
+        # Ensure exact target length
+        target_samples = int(self.sample_length * self.constants.SR)
+        audio_final = librosa.util.fix_length(audio_final, size=target_samples, axis=1)
+
         return audio_final
 
     def encode_sample_directory(

@@ -39,7 +39,7 @@ def main():
 
     print(f"Generating {args.count} {args.type} drum samples...")
     utils.generate_audio(params.model_save_path, args.count, args.output_path)
-    print(f"Generated {args.count} {args.type} samples in {args.output_path}/")
+    print(f"Generated {args.count} {args.type} samples in {args.output_path}")
 
 
 if __name__ == "__main__":
