@@ -1,3 +1,5 @@
+from typing import TypedDict
+
 import torch
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -5,9 +7,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from architecture import Critic, Generator
-from utils.constants import model_selection
-from utils.evaluation import calculate_audio_metrics
-from utils.helpers import DataUtils, ModelParams, ModelUtils, SignalProcessing
+from utils.eval_helpers import calculate_audio_metrics
+from utils.helpers import ModelParams, ModelUtils, SignalProcessing
 
 # Global initialization
 model_params = ModelParams()
@@ -266,18 +267,29 @@ def train_epoch(
     }
 
 
+class ValidateMetrics(TypedDict):
+    epoch: int
+    g_loss: float
+    c_loss: float
+    w_dist: float
+    fad: float
+    iscore: float
+    kid: float
+    val_specs: torch.Tensor
+
+
 def validate(
     generator: Generator,
     critic: Critic,
     dataloader: DataLoader,
     epoch_number: int,
-) -> dict[str, float | torch.Tensor]:
+) -> ValidateMetrics:
     """Execute validation pass."""
     # Prepare loop
     generator.eval()
     critic.eval()
     total_g_loss, total_c_loss, total_w_dist = 0.0, 0.0, 0.0
-    total_fad, total_is, total_kid = 0.0, 0.0, 0.0
+    total_fad, total_iscore, total_kid = 0.0, 0.0, 0.0
 
     # Validation loop
     with torch.no_grad():
@@ -316,7 +328,7 @@ def validate(
                 real_validity, generated_validity
             ).item()
             total_fad += metrics["fad"]
-            total_is += metrics["is"]
+            total_iscore += metrics["iscore"]
             total_kid += metrics["kid"]
 
     return {
@@ -325,7 +337,7 @@ def validate(
         "c_loss": total_c_loss / len(dataloader),
         "w_dist": total_w_dist / len(dataloader),
         "fad": total_fad / len(dataloader),
-        "is": total_is / len(dataloader),
+        "iscore": total_iscore / len(dataloader),
         "kid": total_kid / len(dataloader),
         "val_specs": generated_spec.cpu(),
     }
@@ -355,7 +367,7 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
 
     best_metrics = {
         "fad": float("inf"),
-        "is": float("-inf"),
+        "iscore": float("-inf"),
         "kid": float("inf"),
     }
     epochs_no_improve = 0
@@ -388,23 +400,30 @@ def training_loop(train_loader: DataLoader, val_loader: DataLoader) -> None:
             f"VAL g_loss: {val_metrics['g_loss']:.4f} c_loss: {val_metrics['c_loss']:.4f} w_dist: {val_metrics['w_dist']:.4f}"
         )
         print(
-            f"VAL FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f}"
+            f"VAL FAD: {val_metrics['fad']:.4f} ISCORE: {val_metrics['iscore']:.4f} KID: {val_metrics['kid']:.4f}"
         )
 
         # End of epoch handling
         if val_metrics["fad"] < best_metrics["fad"]:
-            best_metrics["fad"] = val_metrics["fad"]
-            best_metrics["is"] = val_metrics["is"]
-            best_metrics["kid"] = val_metrics["kid"]
-            epochs_no_improve = 0
-            DataUtils.visualize_spectrogram_grid(
-                val_metrics["val_specs"],
-                f"Raw Model Output Epoch {epoch+1} - w_dist: {val_metrics['w_dist']:.4f} FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f}",
-                f"static/{model_selection.name.lower()}_best_val_spectrograms.png",
+            best_metrics["fad"] = (
+                val_metrics["fad"].item()
+                if isinstance(val_metrics["fad"], torch.Tensor)
+                else float(val_metrics["fad"])
             )
+            best_metrics["iscore"] = (
+                val_metrics["iscore"].item()
+                if isinstance(val_metrics["iscore"], torch.Tensor)
+                else float(val_metrics["iscore"])
+            )
+            best_metrics["kid"] = (
+                val_metrics["kid"].item()
+                if isinstance(val_metrics["kid"], torch.Tensor)
+                else float(val_metrics["kid"])
+            )
+            epochs_no_improve = 0
             model_utils.save_model(generator)
             print(
-                f"New best model saved with metrics - FAD: {val_metrics['fad']:.4f} IS: {val_metrics['is']:.4f} KID: {val_metrics['kid']:.4f} -- Stage {generator.stage}/{ModelParams.MAX_STAGE}"
+                f"New best model saved with metrics - FAD: {val_metrics['fad']:.4f} ISCORE: {val_metrics['iscore']:.4f} KID: {val_metrics['kid']:.4f} -- Stage {generator.stage}/{ModelParams.MAX_STAGE}"
             )
         else:
             epochs_no_improve += 1
