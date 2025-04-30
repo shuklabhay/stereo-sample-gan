@@ -12,9 +12,11 @@ def main():
     parser = argparse.ArgumentParser(description="Generate audio samples")
     parser.add_argument(
         "--type",
-        choices=["kick", "snare"],
-        default="kick",
-        help="Type of audio to generate: kick or snare",
+        "--model_type",
+        dest="model_type",
+        choices=[t.value for t in ModelType],
+        default=ModelType.KICKDRUM.value,
+        help="Model type to generate: Kickdrum or Snaredrum",
     )
     parser.add_argument(
         "--count", type=int, default=2, help="Number of samples to generate"
@@ -31,15 +33,15 @@ def main():
     utils = ModelUtils(params.sample_length)
 
     # Select the model type based on command line argument
-    model_type = ModelType.KICKDRUM if args.type == "kick" else ModelType.SNARE
+    model_type = ModelType(args.model_type)
     params.load_params(model_type)
 
     # Make sure the output directory exists
     os.makedirs(args.output_path, exist_ok=True)
 
-    print(f"Generating {args.count} {args.type} drum samples...")
-    utils.generate_audio(params.model_save_path, args.count, args.output_path)
-    print(f"Generated {args.count} {args.type} samples in {args.output_path}")
+    print(f"Generating {args.count} {args.model_type} drum samples...")
+    _ = utils.generate_audio(params.model_save_path, args.count, True, args.output_path)
+    print(f"Generated {args.count} {args.model_type} samples in {args.output_path}")
 
 
 if __name__ == "__main__":

@@ -9,10 +9,7 @@ from numpy.typing import NDArray
 
 class ModelType(Enum):
     KICKDRUM = "Kickdrum"
-    SNARE = "Snare"
-
-
-model_selection = ModelType.SNARE
+    SNAREDRUM = "Snaredrum"
 
 
 @dataclass
@@ -37,21 +34,20 @@ class ModelParams:
 
     # Model specific parameters
     def __init__(self):
-        self.load_params()
-
-        self.outputs_dir = "static"
+        self.outputs_dir = "outputs"
         self.compiled_data_path = "data/compiled_data.npy"
         self.generated_audio_name = "generated_audio"
         self.visualize_generated = True
-        self.sample_length: float
-        self.model_save_path: str
-        self.training_audio_dir: str
+        self.sample_length: float = 0.0
+        self.model_save_path: str = ""
+        self.training_audio_dir: str = ""
 
-    def load_params(self, model_name: ModelType = model_selection) -> None:
+    def load_params(self, model_type: ModelType) -> None:
+        """Load JSON params for the specified model type."""
+        desired_model = model_type.value
         with open("src/utils/model_params.json", "r") as f:
             model_data = json.load(f)
 
-        desired_model = model_name.value
         selected_model = None
         for model in model_data:
             if model["model_name"] == desired_model:

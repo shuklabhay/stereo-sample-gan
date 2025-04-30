@@ -1,4 +1,5 @@
 import os
+import sys
 
 import librosa
 import numpy as np
@@ -26,15 +27,36 @@ class DataUtils:
         return np.load(file_path, allow_pickle=True)
 
     @staticmethod
-    def load_audio(audio_path: str, sample_length: float) -> NDArray[np.float32]:
+    def load_audio(
+        audio_path: str, sample_length: float | None = None
+    ) -> NDArray[np.float32]:
         """Load raw audio as array."""
-        y, _ = librosa.load(audio_path, sr=SignalConstants.SR, mono=False)
+        try:
+            y, _ = librosa.load(audio_path, sr=SignalConstants.SR, mono=False)
+        except Exception as e:
+            print(f"Error loading audio {audio_path}: {e}")
+            sys.exit(1)
+
         if y.ndim == 1:
             y = np.stack((y, y), axis=0)
-        y = librosa.util.fix_length(
-            y, size=int(sample_length * SignalConstants.SR), axis=1
-        )
+        if sample_length is not None:
+            y = librosa.util.fix_length(
+                y, size=int(sample_length * SignalConstants.SR), axis=1
+            )
         return y
+
+    @staticmethod
+    def list_audio_files(dir_path: str) -> list[str]:
+        DataUtils.delete_DSStore(dir_path)
+        if os.path.isfile(dir_path):
+            return [dir_path]
+        if os.path.isdir(dir_path):
+            return [
+                os.path.join(dir_path, f)
+                for f in os.listdir(dir_path)
+                if os.path.isfile(os.path.join(dir_path, f))
+            ]
+        return []
 
     @staticmethod
     def save_audio(audio_path: str, audio: NDArray) -> None:
@@ -58,52 +80,6 @@ class DataUtils:
         DSStore_path = os.path.join(current_directory, ".DS_Store")
         if os.path.exists(DSStore_path):
             os.remove(DSStore_path)
-
-    @staticmethod
-    def visualize_spectrogram_grid(
-        generated_items: torch.Tensor,
-        title: str,
-        save_path: str,
-        items_to_visualize: int = 16,
-    ) -> None:
-        """Visualize the first 16 generated spectrograms in a 4x4 grid."""
-        # Extract audio
-        samples = generated_items[:items_to_visualize].detach().cpu().numpy().squeeze()
-        samples = np.mean(samples, axis=1)
-        color_min, color_max = -1, 1
-
-        # Create figure with 4x4 grid
-        fig, axes = plt.subplots(4, 4, figsize=(16, 9))
-        fig.subplots_adjust(hspace=0.1, wspace=0.1, top=0.95, right=0.85)
-
-        # Add overall title
-        fig.suptitle(
-            title,
-            fontsize=10,
-        )
-
-        # Plot spectrograms
-        for ax, img in zip(axes.flatten(), samples):
-            im = ax.imshow(
-                img.T,
-                cmap="viridis",
-                aspect="auto",
-                origin="lower",
-                vmin=color_min,
-                vmax=color_max,
-            )
-            ax.axis("off")
-
-        # Add label bar to the right
-        cax = fig.add_axes((0.88, 0.1, 0.02, 0.8))
-        cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("Intensity (Normalized dB)", rotation=270, labelpad=10)
-        for spine in cbar.ax.spines.values():
-            spine.set_visible(False)
-
-        # Save and close
-        plt.savefig(save_path, bbox_inches="tight", pad_inches=0.25)
-        plt.close(fig)
 
     @staticmethod
     def generate_sine_impulses(
@@ -156,8 +132,9 @@ class ModelUtils:
         self,
         model_save_path: str,
         generation_count: int = 2,
+        save: bool = True,
         output_path: str | None = None,
-    ) -> None:
+    ) -> dict[str, NDArray[np.float32]]:
         """Generate audio with saved model."""
         self.load_model(model_save_path, ModelParams.DEVICE)
 
@@ -170,18 +147,22 @@ class ModelUtils:
         with torch.no_grad():
             generated_output = self.generator(z).squeeze().numpy()
 
-        # Visualize and save audio
-        for i in tqdm(
-            range(generation_count),
-            desc=f"Generating audio",
-        ):
-            current_sample = generated_output[i]
-            audio_info = self.signal_processing.norm_spec_to_audio(current_sample)
-            audio_save_path = os.path.join(
-                output_path,
-                f"{self.params.generated_audio_name}_{i + 1}.wav",
+        # Save, visualize, etc
+        generated_waveforms = []
+        for i in tqdm(range(generation_count), desc="Generating audio"):
+            spec = generated_output[i]
+            waveform = self.signal_processing.norm_spec_to_audio(spec)
+            generated_waveforms.append(waveform)
+
+            path = os.path.join(
+                output_path, f"{self.params.generated_audio_name}_{i+1}.wav"
             )
-            DataUtils.save_audio(audio_save_path, audio_info)
+            if save:
+                DataUtils.save_audio(path, waveform)
+
+        specs = generated_output
+        waveforms = np.array(generated_waveforms)
+        return {"specs": specs, "waveforms": waveforms}
 
 
 class SignalProcessing:
@@ -313,34 +294,25 @@ class SignalProcessing:
         return torch.tensor(np.array(real_data))
 
     def stft_and_istft(
-        self, sample_path: str, file_name: str, visualize: bool = False
-    ) -> None:
-        """Perform a STFT and ISTFT operation."""
+        self, sample_path: str, file_name: str, save: bool = False
+    ) -> dict[str, NDArray[np.float32]]:
+        """Perform a STFT and ISTFT operation and return results."""
         # Load data
-        y = DataUtils.load_audio(sample_path, self.sample_length)
+        waveform = DataUtils.load_audio(sample_path, self.sample_length)
 
         # Process data
-        stft = self.audio_to_norm_spec(y)
+        stft = self.audio_to_norm_spec(waveform)
         istft = self.norm_spec_to_audio(stft)
         vis_istft = self.audio_to_norm_spec(istft)
 
-        # Visualize/save data
-        print(
-            "audio shape:",
-            np.array(y).shape,
-            "stft shape:",
-            stft.shape,
-            "istft shape:",
-            istft.shape,
-            "istft vis shape:",
-            vis_istft.shape,
-        )
+        if save:
+            save_path = os.path.join(self.params.outputs_dir, f"{file_name}.wav")
+            DataUtils.save_audio(save_path, istft)
 
-        save_path = os.path.join(self.params.outputs_dir, f"{file_name}.wav")
-        DataUtils.save_audio(save_path, istft)
+        return {"waveform": waveform, "stft": stft, "istft": istft}
 
     @staticmethod
-    def fade_out_stereo_audio(y: np.ndarray, n_fade: int = 15) -> np.ndarray:
+    def fade_out_stereo_audio(y: np.ndarray, n_fade: int = 5) -> np.ndarray:
         """Apply n-sample fade-out to both channels"""
         for channel in range(y.shape[0]):
             # Get signal info

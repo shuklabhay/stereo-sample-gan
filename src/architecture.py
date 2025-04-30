@@ -39,14 +39,14 @@ class MiniBatchStdDev(nn.Module):
         return torch.cat([x, mean_std], dim=1)
 
 
-class LinearAttention(nn.Module):
-    """Self-attention mechanism with linear complexity."""
+class SelfAttention(nn.Module):
+    """Self-attention mechanism."""
 
     def __init__(self, in_channels: int) -> None:
         super().__init__()
-        self.reduced_channels = max(in_channels // 8, 1)
-        self.query = nn.Conv2d(in_channels, self.reduced_channels, 1)
-        self.key = nn.Conv2d(in_channels, self.reduced_channels, 1)
+        self.attn_channels = max(in_channels // 8, 1)
+        self.query = nn.Conv2d(in_channels, self.attn_channels, 1)
+        self.key = nn.Conv2d(in_channels, self.attn_channels, 1)
         self.value = nn.Conv2d(in_channels, in_channels, 1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
@@ -130,7 +130,7 @@ class ToStereo(nn.Module):
         return self.adain(out, style)
 
 
-class UpConvBlock(nn.Module):
+class StyledResizeConvBlock(nn.Module):
     """Upsampling block with styled convolutions."""
 
     def __init__(self, in_channels: int, out_channels: int, style_dim: int) -> None:
@@ -175,7 +175,7 @@ class Generator(nn.Module):
         in_channels = self.initial_channels
         for i in range(1, self.max_stage + 1):
             out_channels = max(in_channels // 2, 8)
-            block = UpConvBlock(in_channels, out_channels, style_dim)
+            block = StyledResizeConvBlock(in_channels, out_channels, style_dim)
             self.blocks.append(block)
             self.toStereo_layers.append(ToStereo(out_channels, style_dim))
             in_channels = out_channels
@@ -232,7 +232,7 @@ class Critic(nn.Module):
             in_channels = out_channels
 
         # Attention block
-        self.attention_block = LinearAttention(in_channels)
+        self.attention_block = SelfAttention(in_channels)
 
         # Feature extractor and classifier
         self.feature_extractor = nn.Sequential(
