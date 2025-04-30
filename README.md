@@ -10,21 +10,15 @@ StereoSampleGAN: A computationally inexpensive approach to high fidelity stereo 
 
 Kick drum generation model trained on curated kick drum samples.
 
-Original training data:
-![Kick drum training data visualization](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/kickdrum_data_visualization.png)
-
-Generated samples:
-![Kick drum model generated examples](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/kickdrum_best_val_spectrograms.png)
+Kick vs. Generated Comparison:
+![Kick Drum Comparison](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/outputs/kickdrum_comparison.png)
 
 ### Snare Drum
 
 Snare drum generation model, focused on producing punchy, tight snare sounds.
 
-Original training data:
-![Snare drum training data visualization](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/snare_data_visualization.png)
-
-Generated samples:
-![Snare drum model generated examples](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/static/snare_best_val_spectrograms.png)
+Snare vs. Generated Comparison:
+![Snare Drum Comparison](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/outputs/snaredrum_comparison.png)
 
 ## Model Usage
 
