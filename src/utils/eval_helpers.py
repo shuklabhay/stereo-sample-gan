@@ -8,7 +8,7 @@ from torchaudio.prototype.pipelines import VGGISH
 from torchmetrics.image.inception import InceptionScore
 from torchmetrics.image.kid import KernelInceptionDistance
 
-from utils.constants import ModelParams, SignalConstants
+from utils.constants import ModelParams
 from utils.helpers import DataUtils, ModelParams
 
 matplotlib.use("agg")

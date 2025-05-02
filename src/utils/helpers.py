@@ -303,7 +303,6 @@ class SignalProcessing:
         # Process data
         stft = self.audio_to_norm_spec(waveform)
         istft = self.norm_spec_to_audio(stft)
-        vis_istft = self.audio_to_norm_spec(istft)
 
         if save:
             save_path = os.path.join(self.params.outputs_dir, f"{file_name}.wav")
