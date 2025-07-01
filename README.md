@@ -1,8 +1,8 @@
-# StereoSampleGAN
+# PercGAN
 
 [![On Push](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)
 
-StereoSampleGAN: A computationally inexpensive approach to high fidelity stereo audio sample generation.
+PercGAN: A computationally inexpensive approach to high fidelity stereo audio sample generation.
 
 ## Pretrained Models
 
@@ -48,7 +48,7 @@ Parameters:
 
 ## Technical Approach
 
-StereoSampleGAN combines these audio generation techniques:
+PercGAN combines these audio generation techniques:
 
 - **Mel-Spectrogram Representation**: For efficient learning of frequency patterns
 - **Progressive Growing**: Training on increasingly higher resolution spectrograms

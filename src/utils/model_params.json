@@ -2,13 +2,13 @@
   {
     "model_name": "Kickdrum",
     "sample_length": 0.6,
-    "model_save_path": "outputs/StereoSampleGAN-Kickdrum.pth",
+    "model_save_path": "outputs/PercGAN-Kickdrum.pth",
     "train_data_dir": "data/kickdrum_samples"
   },
   {
     "model_name": "Snaredrum",
     "sample_length": 0.6,
-    "model_save_path": "outputs/StereoSampleGAN-Snaredrum.pth",
+    "model_save_path": "outputs/PercGAN-Snaredrum.pth",
     "train_data_dir": "data/snaredrum_samples"
   }
 ]
