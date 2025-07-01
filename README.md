@@ -1,6 +1,6 @@
 # PercGAN
 
-[![On Push](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)](https://github.com/shuklabhay/stereo-sample-gan/actions/workflows/push.yml/badge.svg)
+[![On Push](https://github.com/shuklabhay/percgan/actions/workflows/push.yml/badge.svg)](https://github.com/shuklabhay/percgan/actions/workflows/push.yml/badge.svg)
 
 PercGAN: A computationally inexpensive approach to high fidelity stereo audio sample generation.
 
@@ -11,14 +11,14 @@ PercGAN: A computationally inexpensive approach to high fidelity stereo audio sa
 Kick drum generation model trained on curated kick drum samples.
 
 Kick vs. Generated Comparison:
-![Kick Drum Comparison](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/outputs/kickdrum_comparison.png)
+![Kick Drum Comparison](https://raw.githubusercontent.com/shuklabhay/percgan/refs/heads/main/outputs/kickdrum_comparison.png)
 
 ### Snare Drum
 
 Snare drum generation model, focused on producing punchy, tight snare sounds.
 
 Snare vs. Generated Comparison:
-![Snare Drum Comparison](https://raw.githubusercontent.com/shuklabhay/stereo-sample-gan/refs/heads/main/outputs/snaredrum_comparison.png)
+![Snare Drum Comparison](https://raw.githubusercontent.com/shuklabhay/percgan/refs/heads/main/outputs/snaredrum_comparison.png)
 
 ## Model Usage
 
